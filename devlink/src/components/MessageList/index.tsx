@@ -40,10 +40,10 @@ export function MessageList() {
   const renderMessage = (message: any, index: number) => {
     const prev = channelMessages[index - 1];
     const needsDivider = !prev || !isSameDay(new Date(prev.createdAt), new Date(message.createdAt));
-    const user = users.find((u: any) => u._id === message.authorId) as any;
+    const user = users.find((u: any) => u.id === message.authorId) as any;
     const userName = user?.name?.split(' ')[0] || 'unknown';
     const prevMsg = channelMessages[index - 1];
-    const prevUser = users.find((u: any) => u._id === prevMsg?.authorId) as any;
+    const prevUser = users.find((u: any) => u.id === prevMsg?.authorId) as any;
     const sameAuthor = prevMsg && prevUser?.name === user?.name;
 
     return (

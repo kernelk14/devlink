@@ -228,7 +228,7 @@ export function ChannelSettingsModal({ channelId, onClose }: ChannelSettingsModa
               ) : (
                 <div className="members-list">
                   {channel.members.map((memberId: string) => {
-                    const member = allUsers.find(u => u._id === memberId);
+                    const member = allUsers.find(u => u.id === memberId || u._id === memberId);
                     return (
                       <div key={memberId} className="member-item">
                         <div className="avatar avatar-sm" style={{ background: 'var(--purple)' }}>
@@ -236,7 +236,7 @@ export function ChannelSettingsModal({ channelId, onClose }: ChannelSettingsModa
                         </div>
                         <div className="member-info">
                           <div className="member-name">{member?.name || 'Unknown User'}</div>
-                          <div className="member-role">{memberId === channel.createdBy ? 'Admin' : 'Member'}</div>
+                          <div className="member-role">{memberId === (channel as any).createdBy ? 'Admin' : 'Member'}</div>
                         </div>
                         <button className="btn btn-ghost btn-icon">...</button>
                       </div>

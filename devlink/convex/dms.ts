@@ -10,23 +10,29 @@ export const getOrCreateDM = mutation({
   },
   handler: async (ctx, args) => {
     const participants = [args.user1Id, args.user2Id].sort();
-    
+
     // Check if DM already exists
-    const existing = await ctx.db
+    const allDMs = await ctx.db
       .query("directMessages")
-      .withIndex("by_participants", (q) => q.eq("participantIds", participants))
-      .first();
-      
-    if (existing) return existing._id;
-    
+      .collect();
+
+    const existing = allDMs.find(dm => {
+      const p = dm.participantIds.sort();
+      return p[0] === participants[0] && p[1] === participants[1];
+    });
+
+    if (existing) return existing._id.toString();
+
     // Create new DM conversation
     const now = Date.now();
-    return await ctx.db.insert("directMessages", {
+    const dmId = await ctx.db.insert("directMessages", {
       participantIds: participants,
       orgId: args.orgId,
       lastActivity: now,
       createdAt: now,
     });
+
+    return dmId.toString();
   },
 });
 
@@ -34,8 +40,11 @@ export const getOrCreateDM = mutation({
 export const getMyDMs = query({
   args: { userId: v.string() },
   handler: async (ctx, args) => {
-    return await ctx.db
+    const allDMs = await ctx.db
       .query("directMessages")
-      .collect(); // Simple fetch for now, we'll filter in JS or add index later
+      .collect();
+
+    // Filter DMs that include the given userId
+    return allDMs.filter(dm => dm.participantIds.includes(args.userId));
   },
 });

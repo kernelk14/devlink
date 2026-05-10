@@ -19,8 +19,8 @@ export function ChannelSidebar() {
   const currentUser = currentUserData || getCurrentUser();
 
   const sortedChannels = [...channels].sort((a, b) => {
-    const idA = (a as any)._id;
-    const idB = (b as any)._id;
+    const idA = a._id || a.id;
+    const idB = b._id || b.id;
     const aStarred = starredChannels.includes(idA);
     const bStarred = starredChannels.includes(idB);
     if (aStarred && !bStarred) return -1;
@@ -28,9 +28,9 @@ export function ChannelSidebar() {
     return a.name.localeCompare(b.name);
   });
 
-  const dmUsers = allUsers.filter(u => 
-    u._id !== currentUserId && 
-    (currentUserData as any)?.contacts?.includes(u._id)
+  const dmUsers = allUsers.filter(u =>
+    u.id !== currentUserId &&
+    (currentUserData as any)?.contacts?.includes(u.id)
   );
 
   return (

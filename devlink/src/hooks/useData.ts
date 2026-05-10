@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useQuery as useConvexQuery, useMutation as useConvexMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
@@ -13,21 +13,65 @@ export function useUsers() {
   // Use Convex real-time query
   const convexUsers = useConvexQuery(api.users.getUsers);
 
-  // Sync Convex real-time data into TanStack Query cache
+  // Sync Convex real-time data into TanStack Query cache, mapped to consistent format
   useEffect(() => {
     if (convexUsers !== undefined) {
-      queryClient.setQueryData(USERS_QUERY_KEY, convexUsers);
+      const mapped = convexUsers.map((u: any) => ({
+        id: u._id,
+        _id: u._id,
+        name: u.name,
+        email: u.email,
+        username: u.username,
+        avatar: u.avatar,
+        status: u.status,
+        statusMessage: u.statusMessage,
+        color: u.color,
+        contacts: u.contacts || [],
+        createdAt: u.createdAt,
+        updatedAt: u.updatedAt,
+      }));
+      queryClient.setQueryData(USERS_QUERY_KEY, mapped);
     }
   }, [convexUsers]);
 
   return useQuery({
     queryKey: USERS_QUERY_KEY,
     queryFn: async () => {
-      if (convexUsers) return convexUsers;
+      if (convexUsers) {
+        return convexUsers.map((u: any) => ({
+          id: u._id,
+          _id: u._id,
+          name: u.name,
+          email: u.email,
+          username: u.username,
+          avatar: u.avatar,
+          status: u.status,
+          statusMessage: u.statusMessage,
+          color: u.color,
+          contacts: u.contacts || [],
+          createdAt: u.createdAt,
+          updatedAt: u.updatedAt,
+        }));
+      }
       throw new Error('Waiting for Convex data...');
     },
     refetchOnWindowFocus: false,
-    placeholderData: convexUsers ?? undefined,
+    placeholderData: convexUsers
+      ? convexUsers.map((u: any) => ({
+          id: u._id,
+          _id: u._id,
+          name: u.name,
+          email: u.email,
+          username: u.username,
+          avatar: u.avatar,
+          status: u.status,
+          statusMessage: u.statusMessage,
+          color: u.color,
+          contacts: u.contacts || [],
+          createdAt: u.createdAt,
+          updatedAt: u.updatedAt,
+        }))
+      : undefined,
   });
 }
 
@@ -40,8 +84,12 @@ export function useUser(userId: string | undefined) {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    if (convexUser !== undefined) {
+    if (convexUser !== undefined && convexUser !== null) {
       queryClient.setQueryData(['users', userId], convexUser);
+      queryClient.setQueryData(['user', userId], {
+        id: convexUser._id,
+        ...convexUser,
+      });
     }
   }, [convexUser, userId]);
 
@@ -194,17 +242,61 @@ export function useChannels(orgId?: string, userId?: string) {
 
   useEffect(() => {
     if (convexChannels !== undefined) {
-      queryClient.setQueryData([CHANNELS_QUERY_KEY, orgId, userId], convexChannels);
+      const mapped = convexChannels.map((c: any) => ({
+        id: c._id,
+        _id: c._id,
+        name: c.name,
+        type: c.type,
+        description: c.description,
+        members: c.members || [],
+        unreadCount: c.unreadCount || 0,
+        pinnedCount: c.pinnedCount || 0,
+        lastActivity: c.lastActivity,
+        createdAt: c.createdAt,
+        updatedAt: c.updatedAt,
+        orgId: c.orgId,
+      }));
+      queryClient.setQueryData([CHANNELS_QUERY_KEY, orgId, userId], mapped);
     }
   }, [convexChannels, orgId, userId]);
 
   return useQuery({
     queryKey: [CHANNELS_QUERY_KEY, orgId, userId],
     queryFn: async () => {
-      if (convexChannels) return convexChannels;
+      if (convexChannels) {
+        return convexChannels.map((c: any) => ({
+          id: c._id,
+          _id: c._id,
+          name: c.name,
+          type: c.type,
+          description: c.description,
+          members: c.members || [],
+          unreadCount: c.unreadCount || 0,
+          pinnedCount: c.pinnedCount || 0,
+          lastActivity: c.lastActivity,
+          createdAt: c.createdAt,
+          updatedAt: c.updatedAt,
+          orgId: c.orgId,
+        }));
+      }
       throw new Error('Waiting for Convex data...');
     },
-    placeholderData: convexChannels,
+    placeholderData: convexChannels
+      ? convexChannels.map((c: any) => ({
+          id: c._id,
+          _id: c._id,
+          name: c.name,
+          type: c.type,
+          description: c.description,
+          members: c.members || [],
+          unreadCount: c.unreadCount || 0,
+          pinnedCount: c.pinnedCount || 0,
+          lastActivity: c.lastActivity,
+          createdAt: c.createdAt,
+          updatedAt: c.updatedAt,
+          orgId: c.orgId,
+        }))
+      : undefined,
     refetchOnWindowFocus: false,
   });
 }
@@ -218,11 +310,27 @@ export function useChannel(channelId: string | undefined) {
   return useQuery({
     queryKey: ['channels', channelId],
     queryFn: async () => {
-      if (convexChannel) return convexChannel;
+      if (convexChannel) {
+        const { _id, ...rest } = convexChannel;
+        return {
+          id: _id,
+          _id,
+          ...rest,
+        };
+      }
       throw new Error('Waiting for Convex data...');
     },
     enabled: !!channelId,
-    placeholderData: convexChannel ?? undefined,
+    placeholderData: convexChannel
+      ? (() => {
+          const { _id, ...rest } = convexChannel;
+          return {
+            id: _id,
+            _id,
+            ...rest,
+          };
+        })()
+      : undefined,
     refetchOnWindowFocus: false,
   });
 }
@@ -240,8 +348,13 @@ export function useCreateChannel() {
       createdBy: string;
     }) => Promise<any>,
     onSuccess: (newChannel) => {
+      const mapped = {
+        id: newChannel._id,
+        _id: newChannel._id,
+        ...newChannel,
+      };
       queryClient.setQueryData(CHANNELS_QUERY_KEY, (old: any[]) => {
-        return old ? [...old, newChannel] : [newChannel];
+        return old ? [...old, mapped] : [mapped];
       });
       queryClient.invalidateQueries({ queryKey: CHANNELS_QUERY_KEY });
     },
@@ -274,14 +387,25 @@ export function useMessages(channelId?: string) {
 
   useEffect(() => {
     if (convexMessages !== undefined) {
-      queryClient.setQueryData(['messages', channelId], convexMessages);
+      const mapped = convexMessages.map((m: any) => ({
+        id: m._id,
+        _id: m._id,
+        ...m,
+      }));
+      queryClient.setQueryData(['messages', channelId], mapped);
     }
   }, [convexMessages, channelId]);
 
   return useQuery({
     queryKey: ['messages', channelId],
     queryFn: async () => {
-      if (convexMessages) return convexMessages;
+      if (convexMessages) {
+        return convexMessages.map((m: any) => ({
+          id: m._id,
+          _id: m._id,
+          ...m,
+        }));
+      }
       throw new Error('Waiting for Convex data...');
     },
     enabled: !!channelId,
@@ -305,6 +429,7 @@ export function useSendMessage() {
       await queryClient.cancelQueries({ queryKey: ['messages', channelId] });
 
       const optimisticMessage = {
+        id: `temp-${Date.now()}`,
         _id: `temp-${Date.now()}`,
         channelId,
         authorId,
@@ -324,9 +449,16 @@ export function useSendMessage() {
       return { optimisticMessage };
     },
     onSuccess: (result, variables, context) => {
+      if (!result) return;
+      const { _id, ...rest } = result;
+      const mapped = {
+        id: _id,
+        _id,
+        ...rest,
+      };
       queryClient.setQueryData(['messages', variables.channelId], (old: any[]) => {
         return old?.map((msg: any) =>
-          msg._id === context?.optimisticMessage._id ? result : msg
+          msg._id === context?.optimisticMessage._id ? mapped : msg
         );
       });
     },
@@ -334,10 +466,6 @@ export function useSendMessage() {
       queryClient.setQueryData(['messages', variables.channelId], (old: any[]) => {
         return old?.filter((msg: any) => msg._id !== context?.optimisticMessage._id);
       });
-      // Add to failed messages for retry
-      const failed = JSON.parse(localStorage.getItem('failed-messages') || '[]');
-      failed.push({ channelId: variables.channelId, content: variables.content, authorId: variables.authorId, timestamp: Date.now() });
-      localStorage.setItem('failed-messages', JSON.stringify(failed));
     },
     onSettled: (data, error, variables) => {
       queryClient.invalidateQueries({ queryKey: ['messages', variables.channelId] });
@@ -455,7 +583,7 @@ export function useDeleteMessage() {
 
   return useMutation({
     mutationFn: (messageId: string) => deleteMessageConvex({ messageId: messageId as any }),
-    onSuccess: (_, messageId) => {
+    onSuccess: (_result, messageId) => {
       queryClient.invalidateQueries({ queryKey: ['messages'] });
     },
   });
@@ -545,7 +673,10 @@ export function useOrCreateDM() {
 
   return useMutation({
     mutationFn: ({ user1Id, user2Id, orgId }: { user1Id: string; user2Id: string; orgId: string }) =>
-      getOrCreateDMConvex({ user1Id, user2Id, orgId }),
+      getOrCreateDMConvex({ user1Id, user2Id, orgId }) as Promise<string>,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['dms'] });
+    },
   });
 }
 
