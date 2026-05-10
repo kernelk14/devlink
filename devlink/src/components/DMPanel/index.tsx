@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useUIStore } from '@/lib/store';
-import { useUser, useOrCreateDM, useMessages } from '@/hooks/useData';
-import { useSendMessage } from '@/hooks/useData';
+import { useUser, useOrCreateDM, useMessages, useSendMessage } from '@/hooks/useData';
 import { Avatar } from '../ui/Avatar';
 import { ArrowLeft, Send, Smile, MoreHorizontal } from 'lucide-react';
 import { format, isToday, isYesterday } from 'date-fns';
@@ -17,6 +16,7 @@ export function DMPanel() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const prevDMUserId = useRef<string | null>(null);
+  const messageSentRef = useRef(false);
 
   const { selectedDMUserId, setSelectedDMUser, currentUserId, currentOrgId, addToast } = useUIStore();
   const { data: otherUser, isLoading: userLoading } = useUser(selectedDMUserId || undefined);
@@ -24,13 +24,13 @@ export function DMPanel() {
   const { data: messages = [], isLoading: messagesLoading } = useMessages(conversationId ?? undefined);
   const sendMessageMutation = useSendMessage();
 
-  // Initialize or re-init DM conversation when DM user changes
+  // Initialize DM conversation when DM user changes
   useEffect(() => {
     if (selectedDMUserId && currentUserId && currentOrgId) {
-      // Reset conversation when switching users
       if (prevDMUserId.current !== selectedDMUserId) {
         prevDMUserId.current = selectedDMUserId;
         setConversationId(null);
+        messageSentRef.current = false;
 
         async function initDM() {
           try {
@@ -40,8 +40,7 @@ export function DMPanel() {
               user2Id: selectedDMUserId,
               orgId: currentOrgId,
             });
-            // Handle both string and Id return types
-            const id = typeof result === 'string' ? result : (result as any).toString?.() || result;
+            const id = typeof result === 'string' ? result : String(result);
             if (id) {
               setConversationId(id);
             }
@@ -58,8 +57,8 @@ export function DMPanel() {
   // Reset when panel closes
   useEffect(() => {
     if (!selectedDMUserId) {
-      setConversationId(null);
       prevDMUserId.current = null;
+      setConversationId(null);
       setMessage('');
     }
   }, [selectedDMUserId]);
@@ -79,7 +78,9 @@ export function DMPanel() {
 
   const handleSend = useCallback(() => {
     if (!message.trim() || !conversationId || !currentUserId) return;
+    if (sendMessageMutation.isPending) return;
 
+    messageSentRef.current = true;
     sendMessageMutation.mutate({
       channelId: conversationId,
       content: message.trim(),
@@ -88,12 +89,14 @@ export function DMPanel() {
       onSuccess: () => {
         setMessage('');
         setShowEmoji(false);
+        messageSentRef.current = false;
       },
-      onError: (err: any) => {
-        addToast({ type: 'error', message: 'Failed to send DM: ' + (err.message || 'Check connection') });
+      onError: () => {
+        setMessage(message.trim()); // Keep message for retry
+        messageSentRef.current = false;
       },
     });
-  }, [message, conversationId, currentUserId, sendMessageMutation, addToast]);
+  }, [message, conversationId, currentUserId, sendMessageMutation]);
 
   const insertEmoji = (emoji: string) => {
     const textarea = textareaRef.current;
@@ -119,6 +122,7 @@ export function DMPanel() {
 
   const isLoading = userLoading || messagesLoading || orCreateDMMutation.isPending;
   const otherUserName = otherUser?.name || 'User';
+  const sendError = sendMessageMutation.isError;
 
   return (
     <aside className="dm-panel">
@@ -186,6 +190,11 @@ export function DMPanel() {
       </div>
 
       <div className="dm-composer">
+        {sendError && (
+          <div style={{ color: 'var(--red)', fontSize: 11, padding: '4px 0', textAlign: 'center' }}>
+            Failed to send — click Send to retry
+          </div>
+        )}
         <div className="dm-composer-inner">
           <textarea
             ref={textareaRef}
@@ -210,7 +219,7 @@ export function DMPanel() {
               type="button"
               className="dm-send-btn"
               onClick={handleSend}
-              disabled={!message.trim() || isLoading}
+              disabled={!message.trim() || isLoading || sendMessageMutation.isPending}
             >
               <Send size={18} />
             </button>
