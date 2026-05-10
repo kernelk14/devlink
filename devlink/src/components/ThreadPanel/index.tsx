@@ -1,23 +1,24 @@
 import { useState } from 'react';
 import { useUIStore, getCurrentUser } from '@/lib/store';
-import { useMessages, useUsers } from '@/hooks/useData';
-import { X, MessageSquare } from 'lucide-react';
+import { useMessages, useSendMessage } from '@/hooks/useData';
+import { X, MessageSquare, Send } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 export function ThreadPanel() {
   const { selectedChannelId, selectedThreadId, setSelectedThread } = useUIStore();
   const { data: messages = [] } = useMessages(selectedChannelId);
-  const { data: users = [] } = useUsers();
   const [replyText, setReplyText] = useState('');
+  const sendMessageMutation = useSendMessage();
+  const currentUserId = useUIStore((state) => state.currentUserId);
 
   const parentMessage = messages.find((m: any) => m._id === selectedThreadId);
-  const user = users.find((u: any) => u._id === parentMessage?.authorId) as any;
-  
+  const userMessageSender = parentMessage?.authorId || '';
+
   const thread = parentMessage ? {
     id: parentMessage._id,
     user: {
-      name: user?.name || 'Unknown',
-      color: user?.color || 'var(--purple)'
+      name: parentMessage.authorId || 'Unknown',
+      color: 'var(--purple)'
     },
     timestamp: parentMessage.createdAt,
     content: parentMessage.content,
@@ -27,7 +28,13 @@ export function ThreadPanel() {
   if (!thread) return null;
 
   const handleReply = () => {
-    if (!replyText.trim()) return;
+    if (!replyText.trim() || !selectedChannelId || !currentUserId) return;
+
+    sendMessageMutation.mutate({
+      channelId: selectedChannelId,
+      content: replyText.trim(),
+      authorId: currentUserId,
+    });
     setReplyText('');
   };
 
@@ -38,7 +45,7 @@ export function ThreadPanel() {
           <MessageSquare size={16} style={{ color: 'var(--green)' }} />
           <span>Thread</span>
         </div>
-        <button 
+        <button
           className="btn btn-ghost btn-icon"
           onClick={() => setSelectedThread(null)}
         >
@@ -67,9 +74,9 @@ export function ThreadPanel() {
         </div>
 
         <div style={{ borderBottom: '1px solid var(--border)', marginBottom: 16 }}>
-          <div style={{ 
-            color: 'var(--fg-muted)', 
-            fontSize: 12, 
+          <div style={{
+            color: 'var(--fg-muted)',
+            fontSize: 12,
             paddingBottom: 8,
             display: 'flex',
             alignItems: 'center',
@@ -117,12 +124,12 @@ export function ThreadPanel() {
               }
             }}
           />
-          <button 
+          <button
             className="btn btn-primary btn-icon oc-send"
             onClick={handleReply}
             disabled={!replyText.trim()}
           >
-            <span style={{ fontSize: 16 }}>↑</span>
+            <Send size={14} />
           </button>
         </div>
       </div>

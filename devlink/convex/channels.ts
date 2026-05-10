@@ -1,15 +1,14 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-import { channelType } from "./schema";
 
 // Get all channels for an organization
 export const getChannels = query({
-  args: { 
+  args: {
     orgId: v.optional(v.string()),
     userId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    let channels = [];
+    let channels: any[] = [];
     if (args.orgId) {
       channels = await ctx.db
         .query("channels")
@@ -18,11 +17,11 @@ export const getChannels = query({
     } else {
       channels = await ctx.db.query("channels").collect();
     }
-    
+
     if (args.userId) {
-      channels = channels.filter(c => c.members.includes(args.userId!));
+      channels = channels.filter(c => c.members && c.members.includes(args.userId!));
     }
-    
+
     return channels;
   },
 });
@@ -51,10 +50,10 @@ export const getChannelByName = query({
 export const createChannel = mutation({
   args: {
     name: v.string(),
-    type: channelType,
+    type: v.union(v.literal("public"), v.literal("private"), v.literal("announcement")),
     description: v.optional(v.string()),
     orgId: v.string(),
-    createdBy: v.id("users"),
+    createdBy: v.string(),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
@@ -63,7 +62,7 @@ export const createChannel = mutation({
       type: args.type,
       description: args.description,
       orgId: args.orgId,
-      members: [args.createdBy.toString()],
+      members: [args.createdBy],
       unreadCount: 0,
       pinnedCount: 0,
       lastActivity: now,
@@ -80,7 +79,7 @@ export const updateChannel = mutation({
     channelId: v.id("channels"),
     name: v.optional(v.string()),
     description: v.optional(v.string()),
-    type: v.optional(channelType),
+    type: v.optional(v.union(v.literal("public"), v.literal("private"), v.literal("announcement"))),
   },
   handler: async (ctx, args) => {
     const { channelId, ...updates } = args;
@@ -97,7 +96,7 @@ export const updateChannel = mutation({
 export const joinChannel = mutation({
   args: {
     channelId: v.id("channels"),
-    userId: v.id("users"),
+    userId: v.string(),
   },
   handler: async (ctx, args) => {
     const channel = await ctx.db.get(args.channelId);
@@ -118,7 +117,7 @@ export const joinChannel = mutation({
 export const leaveChannel = mutation({
   args: {
     channelId: v.id("channels"),
-    userId: v.id("users"),
+    userId: v.string(),
   },
   handler: async (ctx, args) => {
     const channel = await ctx.db.get(args.channelId);
@@ -126,7 +125,7 @@ export const leaveChannel = mutation({
 
     const userIdStr = args.userId.toString();
     await ctx.db.patch(args.channelId, {
-      members: channel.members.filter((id) => id !== userIdStr),
+      members: channel.members.filter((id: string) => id !== userIdStr),
       updatedAt: Date.now(),
     });
     return await ctx.db.get(args.channelId);

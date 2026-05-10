@@ -16,3 +16,15 @@ export function useAuth() {
     logout,
   };
 }
+
+export function useAuthRaw() {
+  const login = useUIStore((state) => state.login);
+  const logout = useUIStore((state) => state.logout);
+  const addToast = useUIStore((state) => state.addToast);
+
+  return {
+    login,
+    logout,
+    addToast,
+  };
+}

@@ -19,7 +19,7 @@ export function DMPanel() {
   const { selectedDMUserId, setSelectedDMUser, currentUserId, currentOrgId, addToast } = useUIStore();
   const { data: otherUser, isLoading: userLoading } = useUser(selectedDMUserId || undefined);
   const orCreateDMMutation = useOrCreateDM();
-  const { data: messages = [], isLoading: messagesLoading } = useMessages(conversationId || undefined);
+  const { data: messages = [], isLoading: messagesLoading } = useMessages(conversationId ?? undefined);
   const sendMessageMutation = useSendMessage();
 
   useEffect(() => {

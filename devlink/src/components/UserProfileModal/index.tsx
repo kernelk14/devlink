@@ -21,21 +21,21 @@ export function UserProfileModal({ userId, onClose }: UserProfileModalProps) {
     if (!currentUserId || isMe) return;
     try {
       const res: any = await connectUserMutation.mutateAsync({ senderId: currentUserId, receiverId: userId });
-      if (res.success) {
-        addToast({ type: 'success', message: `Request sent to ${user.name}` });
+      if (res && res.success) {
+        addToast({ type: 'success', message: `Request sent to ${convexUser?.name || 'user'}` });
       } else {
-        addToast({ type: 'info', message: res.message });
+        addToast({ type: 'info', message: res?.message || 'Request sent' });
       }
     } catch (err) {
       addToast({ type: 'error', message: 'Failed to send request' });
     }
   };
-  
+
   const user = convexUser ? {
     id: convexUser._id,
-    name: (convexUser as any).name || (convexUser as any).email?.split('@')[0] || 'User',
-    username: (convexUser as any).email?.split('@')[0] || 'user',
-    email: (convexUser as any).email || 'user@example.com',
+    name: convexUser.name || convexUser.email?.split('@')[0] || 'User',
+    username: convexUser.email?.split('@')[0] || 'user',
+    email: convexUser.email || 'user@example.com',
     status: convexUser.status || 'offline',
     statusMessage: convexUser.statusMessage,
   } : {
@@ -73,7 +73,7 @@ export function UserProfileModal({ userId, onClose }: UserProfileModalProps) {
         <div className="popup-header">
           <div className="popup-title">
             <span className="prompt-symbol">$</span>
-            <span style={{ color: 'var(--fg-muted)' }}>user.info --id</span>
+            <span style={{ color: 'var(--fg-muted)' }}> user.info --id</span>
             <span style={{ color: 'var(--cyan)' }}>{userId}</span>
           </div>
           <button className="popup-close" onClick={onClose}>
@@ -121,9 +121,9 @@ export function UserProfileModal({ userId, onClose }: UserProfileModalProps) {
                 message
               </button>
               {!isMe && (
-                <button 
-                  className={`btn ${isContact ? 'btn-ghost' : 'btn-secondary'}`} 
-                  style={{ flex: 1 }} 
+                <button
+                  className={`btn ${isContact ? 'btn-ghost' : 'btn-secondary'}`}
+                  style={{ flex: 1 }}
                   onClick={handleConnect}
                   disabled={isContact || connectUserMutation.isPending}
                 >

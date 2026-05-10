@@ -12,7 +12,7 @@ import { Avatar } from '@/components/ui/Avatar';
 export function MessageList() {
   const { selectedChannelId, currentUserId } = useUIStore();
   const { data: channels = [] } = useChannels();
-  const { data: messages = [] } = useMessages(selectedChannelId);
+  const { data: messages = [], isLoading } = useMessages(selectedChannelId);
   const { data: users = [] } = useUsers();
   const addReactionMutation = useAddReaction();
 
@@ -40,10 +40,10 @@ export function MessageList() {
   const renderMessage = (message: any, index: number) => {
     const prev = channelMessages[index - 1];
     const needsDivider = !prev || !isSameDay(new Date(prev.createdAt), new Date(message.createdAt));
-    const user = users.find(u => u._id === message.authorId) as any;
+    const user = users.find((u: any) => u._id === message.authorId) as any;
     const userName = user?.name?.split(' ')[0] || 'unknown';
     const prevMsg = channelMessages[index - 1];
-    const prevUser = users.find(u => u._id === prevMsg?.authorId) as any;
+    const prevUser = users.find((u: any) => u._id === prevMsg?.authorId) as any;
     const sameAuthor = prevMsg && prevUser?.name === user?.name;
 
     return (
@@ -82,9 +82,9 @@ export function MessageList() {
             {message.reactions && message.reactions.length > 0 && (
               <div className="msg-reactions">
                 {message.reactions.map((r: any, i: number) => (
-                  <button 
-                    key={i} 
-                    className="reaction-badge" 
+                  <button
+                    key={i}
+                    className="reaction-badge"
                     onClick={() => {
                       if (currentUserId) {
                         addReactionMutation.mutate({
@@ -115,6 +115,22 @@ export function MessageList() {
       </div>
     );
   };
+
+  if (isLoading && channelMessages.length === 0) {
+    return (
+      <div className="msg-container">
+        <div className="msg-empty">
+          <div className="msg-empty-line">
+            <span className="prompt-user">system</span>
+            <span className="prompt-at">@</span>
+            <span className="prompt-host">devlink</span>
+            <span className="prompt-symbol">$</span>
+            <span className="msg-empty-cmd"> loading...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (channelMessages.length === 0) {
     return (

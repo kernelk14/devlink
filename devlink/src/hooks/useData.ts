@@ -9,11 +9,11 @@ const USERS_QUERY_KEY = ['users'];
 
 export function useUsers() {
   const queryClient = useQueryClient();
-  
-  // Use Convex query
+
+  // Use Convex real-time query
   const convexUsers = useConvexQuery(api.users.getUsers);
-  
-  // Sync Convex real-time data into TanStack Query cache immediately
+
+  // Sync Convex real-time data into TanStack Query cache
   useEffect(() => {
     if (convexUsers !== undefined) {
       queryClient.setQueryData(USERS_QUERY_KEY, convexUsers);
@@ -27,6 +27,7 @@ export function useUsers() {
       throw new Error('Waiting for Convex data...');
     },
     refetchOnWindowFocus: false,
+    placeholderData: convexUsers ?? undefined,
   });
 }
 
@@ -35,9 +36,9 @@ export function useUser(userId: string | undefined) {
     api.users.getUser,
     userId ? { userId: userId as any } : 'skip'
   );
-  
+
   const queryClient = useQueryClient();
-  
+
   useEffect(() => {
     if (convexUser !== undefined) {
       queryClient.setQueryData(['users', userId], convexUser);
@@ -59,11 +60,16 @@ export function useUser(userId: string | undefined) {
 export function useCreateUser() {
   const queryClient = useQueryClient();
   const createUserConvex = useConvexMutation(api.users.createUser);
-  
+
   return useMutation({
-    mutationFn: createUserConvex,
+    mutationFn: createUserConvex as unknown as (variables: {
+      name: string;
+      username: string;
+      email: string;
+      avatar?: string;
+      orgId?: string;
+    }) => Promise<string | undefined>,
     onSuccess: () => {
-      // Invalidate users query to refetch
       queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEY });
     },
   });
@@ -72,11 +78,11 @@ export function useCreateUser() {
 export function useUpdateUserStatus() {
   const queryClient = useQueryClient();
   const updateStatusConvex = useConvexMutation(api.users.updateUserStatus);
-  
+
   return useMutation({
-    mutationFn: async ({ userId, status, statusMessage }: { 
-      userId: string; 
-      status: string; 
+    mutationFn: async ({ userId, status, statusMessage }: {
+      userId: string;
+      status: string;
       statusMessage?: string;
     }) => {
       return await updateStatusConvex({
@@ -86,30 +92,25 @@ export function useUpdateUserStatus() {
       });
     },
     onMutate: async ({ userId, status, statusMessage }) => {
-      // Cancel outgoing refetches
       await queryClient.cancelQueries({ queryKey: ['users', userId] });
-      
-      // Snapshot previous value
+
       const previousUser = queryClient.getQueryData(['users', userId]);
-      
-      // Optimistically update
+
       queryClient.setQueryData(['users', userId], (old: any) => ({
         ...old,
         status,
         statusMessage,
         updatedAt: Date.now(),
       }));
-      
+
       return { previousUser };
     },
     onError: (err, variables, context) => {
-      // Rollback on error
       if (context?.previousUser) {
         queryClient.setQueryData(['users', variables.userId], context.previousUser);
       }
     },
     onSettled: (data, error, variables) => {
-      // Refetch after mutation
       queryClient.invalidateQueries({ queryKey: ['users', variables.userId] });
       queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEY });
     },
@@ -119,9 +120,9 @@ export function useUpdateUserStatus() {
 export function useConnectUser() {
   const queryClient = useQueryClient();
   const sendRequestConvex = useConvexMutation(api.connections.sendRequest);
-  
+
   return useMutation({
-    mutationFn: ({ senderId, receiverId }: { senderId: string, receiverId: string }) => 
+    mutationFn: ({ senderId, receiverId }: { senderId: string, receiverId: string }) =>
       sendRequestConvex({ senderId: senderId as any, receiverId: receiverId as any }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['connection-requests'] });
@@ -134,7 +135,7 @@ export function usePendingRequests(userId: string | undefined) {
     api.connections.getPendingRequests,
     userId ? { userId: userId as any } : 'skip'
   );
-  
+
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -157,7 +158,7 @@ export function usePendingRequests(userId: string | undefined) {
 export function useAcceptRequest() {
   const queryClient = useQueryClient();
   const acceptRequestConvex = useConvexMutation(api.connections.acceptRequest);
-  
+
   return useMutation({
     mutationFn: (requestId: string) => acceptRequestConvex({ requestId: requestId as any }),
     onSuccess: () => {
@@ -170,7 +171,7 @@ export function useAcceptRequest() {
 export function useRejectRequest() {
   const queryClient = useQueryClient();
   const rejectRequestConvex = useConvexMutation(api.connections.rejectRequest);
-  
+
   return useMutation({
     mutationFn: (requestId: string) => rejectRequestConvex({ requestId: requestId as any }),
     onSuccess: () => {
@@ -188,10 +189,9 @@ export function useChannels(orgId?: string, userId?: string) {
     api.channels.getChannels,
     { orgId, userId }
   );
-  
+
   const queryClient = useQueryClient();
 
-  // Sync Convex real-time data into TanStack Query cache immediately
   useEffect(() => {
     if (convexChannels !== undefined) {
       queryClient.setQueryData([CHANNELS_QUERY_KEY, orgId, userId], convexChannels);
@@ -214,7 +214,7 @@ export function useChannel(channelId: string | undefined) {
     api.channels.getChannel,
     channelId ? { channelId: channelId as any } : 'skip'
   );
-  
+
   return useQuery({
     queryKey: ['channels', channelId],
     queryFn: async () => {
@@ -230,15 +230,19 @@ export function useChannel(channelId: string | undefined) {
 export function useCreateChannel() {
   const queryClient = useQueryClient();
   const createChannelConvex = useConvexMutation(api.channels.createChannel);
-  
+
   return useMutation({
-    mutationFn: createChannelConvex,
+    mutationFn: createChannelConvex as unknown as (variables: {
+      name: string;
+      type: 'public' | 'private' | 'announcement';
+      description?: string;
+      orgId: string;
+      createdBy: string;
+    }) => Promise<any>,
     onSuccess: (newChannel) => {
-      // Optimistically add to cache
       queryClient.setQueryData(CHANNELS_QUERY_KEY, (old: any[]) => {
         return old ? [...old, newChannel] : [newChannel];
       });
-      // Invalidate to refetch
       queryClient.invalidateQueries({ queryKey: CHANNELS_QUERY_KEY });
     },
   });
@@ -247,9 +251,9 @@ export function useCreateChannel() {
 export function useJoinChannel() {
   const queryClient = useQueryClient();
   const joinChannelConvex = useConvexMutation(api.channels.joinChannel);
-  
+
   return useMutation({
-    mutationFn: ({ channelId, userId }: { channelId: string, userId: string }) => 
+    mutationFn: ({ channelId, userId }: { channelId: string; userId: string }) =>
       joinChannelConvex({ channelId: channelId as any, userId: userId as any }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: [CHANNELS_QUERY_KEY] });
@@ -260,16 +264,14 @@ export function useJoinChannel() {
 
 // ==================== MESSAGES ====================
 
-export function useMessages(channelId: string) {
+export function useMessages(channelId?: string) {
   const convexMessages = useConvexQuery(
     api.messages.getMessages,
     channelId ? { channelId } : 'skip'
   );
-  
+
   const queryClient = useQueryClient();
 
-  // KEY FIX: Sync Convex real-time subscription updates into TanStack Query cache
-  // Without this, new messages from Convex never trigger a re-render in components
   useEffect(() => {
     if (convexMessages !== undefined) {
       queryClient.setQueryData(['messages', channelId], convexMessages);
@@ -290,7 +292,7 @@ export function useMessages(channelId: string) {
 export function useSendMessage() {
   const queryClient = useQueryClient();
   const sendMessageConvex = useConvexMutation(api.messages.sendMessage);
-  
+
   return useMutation({
     mutationFn: async ({ channelId, content, authorId }: {
       channelId: string;
@@ -300,10 +302,8 @@ export function useSendMessage() {
       return await sendMessageConvex({ channelId, content, authorId });
     },
     onMutate: async ({ channelId, content, authorId }) => {
-      // Cancel outgoing refetches
       await queryClient.cancelQueries({ queryKey: ['messages', channelId] });
-      
-      // Create optimistic message
+
       const optimisticMessage = {
         _id: `temp-${Date.now()}`,
         channelId,
@@ -311,35 +311,35 @@ export function useSendMessage() {
         content,
         isEdited: false,
         isPinned: false,
-        reactions: [],
+        reactions: [] as any[],
         replies: 0,
         createdAt: Date.now(),
         updatedAt: null,
       };
-      
-      // Add to cache optimistically
+
       queryClient.setQueryData(['messages', channelId], (old: any[]) => {
         return old ? [...old, optimisticMessage] : [optimisticMessage];
       });
-      
+
       return { optimisticMessage };
     },
     onSuccess: (result, variables, context) => {
-      // Replace optimistic message with real one
       queryClient.setQueryData(['messages', variables.channelId], (old: any[]) => {
-        return old?.map((msg: any) => 
+        return old?.map((msg: any) =>
           msg._id === context?.optimisticMessage._id ? result : msg
         );
       });
     },
     onError: (error, variables, context) => {
-      // Remove optimistic message on error
       queryClient.setQueryData(['messages', variables.channelId], (old: any[]) => {
         return old?.filter((msg: any) => msg._id !== context?.optimisticMessage._id);
       });
+      // Add to failed messages for retry
+      const failed = JSON.parse(localStorage.getItem('failed-messages') || '[]');
+      failed.push({ channelId: variables.channelId, content: variables.content, authorId: variables.authorId, timestamp: Date.now() });
+      localStorage.setItem('failed-messages', JSON.stringify(failed));
     },
     onSettled: (data, error, variables) => {
-      // Always refetch to ensure consistency
       queryClient.invalidateQueries({ queryKey: ['messages', variables.channelId] });
     },
   });
@@ -348,7 +348,7 @@ export function useSendMessage() {
 export function useAddReaction() {
   const queryClient = useQueryClient();
   const addReactionConvex = useConvexMutation(api.messages.addReaction);
-  
+
   return useMutation({
     mutationFn: async ({ messageId, emoji, userId }: {
       messageId: string;
@@ -362,26 +362,24 @@ export function useAddReaction() {
       });
     },
     onMutate: async ({ messageId, emoji, userId }) => {
-      // Find which channel this message belongs to
       const allMessageQueries = queryClient.getQueriesData({ queryKey: ['messages'] });
-      
+
       for (const [queryKey, messages] of allMessageQueries) {
         const messageList = messages as any[];
         const message = messageList?.find((m: any) => m._id === messageId);
-        
+
         if (message) {
           await queryClient.cancelQueries({ queryKey });
-          
+
           const previousMessages = queryClient.getQueryData(queryKey);
-          
-          // Update reactions optimistically
+
           queryClient.setQueryData(queryKey, (old: any[]) => {
             return old?.map((msg: any) => {
               if (msg._id !== messageId) return msg;
-              
+
               const reactions = [...(msg.reactions || [])];
               const existing = reactions.find((r: any) => r.emoji === emoji);
-              
+
               if (existing) {
                 if (!existing.users.includes(userId)) {
                   existing.count++;
@@ -390,11 +388,11 @@ export function useAddReaction() {
               } else {
                 reactions.push({ emoji, count: 1, users: [userId] });
               }
-              
+
               return { ...msg, reactions };
             });
           });
-          
+
           return { previousMessages, queryKey };
         }
       }
@@ -413,29 +411,29 @@ export function useAddReaction() {
 export function useEditMessage() {
   const queryClient = useQueryClient();
   const editMessageConvex = useConvexMutation(api.messages.editMessage);
-  
+
   return useMutation({
     mutationFn: async ({ messageId, content }: { messageId: string; content: string }) => {
       return await editMessageConvex({ messageId: messageId as any, content });
     },
     onMutate: async ({ messageId, content }) => {
       const allMessageQueries = queryClient.getQueriesData({ queryKey: ['messages'] });
-      
+
       for (const [queryKey, messages] of allMessageQueries) {
         const messageList = messages as any[];
         const message = messageList?.find((m: any) => m._id === messageId);
-        
+
         if (message) {
           await queryClient.cancelQueries({ queryKey });
           const previousMessages = queryClient.getQueryData(queryKey);
-          
+
           queryClient.setQueryData(queryKey, (old: any[]) => {
             return old?.map((msg: any) => {
               if (msg._id !== messageId) return msg;
               return { ...msg, content, isEdited: true, updatedAt: Date.now() };
             });
           });
-          
+
           return { previousMessages, queryKey };
         }
       }
@@ -451,13 +449,49 @@ export function useEditMessage() {
   });
 }
 
+export function useDeleteMessage() {
+  const queryClient = useQueryClient();
+  const deleteMessageConvex = useConvexMutation(api.messages.deleteMessage);
+
+  return useMutation({
+    mutationFn: (messageId: string) => deleteMessageConvex({ messageId: messageId as any }),
+    onSuccess: (_, messageId) => {
+      queryClient.invalidateQueries({ queryKey: ['messages'] });
+    },
+  });
+}
+
+export function usePinMessage() {
+  const queryClient = useQueryClient();
+  const pinMessageConvex = useConvexMutation(api.messages.pinMessage);
+
+  return useMutation({
+    mutationFn: (messageId: string) => pinMessageConvex({ messageId: messageId as any }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['messages'] });
+    },
+  });
+}
+
+export function useUnpinMessage() {
+  const queryClient = useQueryClient();
+  const unpinMessageConvex = useConvexMutation(api.messages.unpinMessage);
+
+  return useMutation({
+    mutationFn: (messageId: string) => unpinMessageConvex({ messageId: messageId as any }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['messages'] });
+    },
+  });
+}
+
 // ==================== ORGANIZATIONS ====================
 
 const ORGS_QUERY_KEY = ['organizations'];
 
 export function useOrganizations() {
   const convexOrgs = useConvexQuery(api.organizations.getOrganizations);
-  
+
   return useQuery({
     queryKey: ORGS_QUERY_KEY,
     queryFn: async () => {
@@ -474,7 +508,7 @@ export function useOrganization(orgId: string | undefined) {
     api.organizations.getOrganization,
     orgId ? { orgId: orgId as any } : 'skip'
   );
-  
+
   return useQuery({
     queryKey: ['organizations', orgId],
     queryFn: async () => {
@@ -490,9 +524,13 @@ export function useOrganization(orgId: string | undefined) {
 export function useCreateOrganization() {
   const queryClient = useQueryClient();
   const createOrgConvex = useConvexMutation(api.organizations.createOrganization);
-  
+
   return useMutation({
-    mutationFn: createOrgConvex,
+    mutationFn: createOrgConvex as unknown as (variables: {
+      name: string;
+      slug: string;
+      avatar?: string;
+    }) => Promise<string>,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ORGS_QUERY_KEY });
     },
@@ -504,9 +542,9 @@ export function useCreateOrganization() {
 export function useOrCreateDM() {
   const queryClient = useQueryClient();
   const getOrCreateDMConvex = useConvexMutation(api.dms.getOrCreateDM);
-  
+
   return useMutation({
-    mutationFn: ({ user1Id, user2Id, orgId }: { user1Id: string, user2Id: string, orgId: string }) => 
+    mutationFn: ({ user1Id, user2Id, orgId }: { user1Id: string; user2Id: string; orgId: string }) =>
       getOrCreateDMConvex({ user1Id, user2Id, orgId }),
   });
 }
@@ -516,7 +554,7 @@ export function useMyDMs(userId: string | undefined) {
     api.dms.getMyDMs,
     userId ? { userId } : 'skip'
   );
-  
+
   return useQuery({
     queryKey: ['dms', userId],
     queryFn: async () => {
@@ -524,5 +562,23 @@ export function useMyDMs(userId: string | undefined) {
       throw new Error('Waiting for Convex data...');
     },
     enabled: !!userId,
+  });
+}
+
+export function useSendDM() {
+  const queryClient = useQueryClient();
+  const sendMessageConvex = useConvexMutation(api.messages.sendMessage);
+
+  return useMutation({
+    mutationFn: async ({ dmId, content, authorId }: {
+      dmId: string;
+      content: string;
+      authorId: string;
+    }) => {
+      return await sendMessageConvex({ channelId: dmId, content, authorId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['messages'] });
+    },
   });
 }

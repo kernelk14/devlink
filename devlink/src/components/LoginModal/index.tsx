@@ -37,18 +37,20 @@ export function LoginModal({ onClose }: LoginModalProps) {
   const [ghAuthStep, setGhAuthStep] = useState<'idle' | 'code' | 'polling' | 'complete'>('idle');
   const [ghDeviceCode, setGhDeviceCode] = useState('');
   const [ghUserCode, setGhUserCode] = useState('');
+  const [ghError, setGhError] = useState('');
   const ghPollingRef = useRef<number | null>(null);
 
   const handleGithubLogin = async () => {
     try {
       setGhAuthStep('code');
+      setGhError('');
       const deviceCode = await startGithubAuth((userCode) => {
         setGhDeviceCode('https://github.com/login/device');
         setGhUserCode(userCode);
       });
-      
+
       setGhAuthStep('polling');
-      
+
       const poll = async () => {
         try {
           const result = await pollGithubToken(deviceCode);
@@ -56,26 +58,35 @@ export function LoginModal({ onClose }: LoginModalProps) {
             ghPollingRef.current = window.setTimeout(poll, result === 'slow_down' ? 10000 : 5000);
             return;
           }
-          
+
           if (typeof result === 'string' && result.length > 20) {
-            const user = await getGithubUser(result);
+            const ghUser = await getGithubUser(result);
             const emails = await getGithubEmails(result);
-            const primaryEmail = emails.find(e => e.primary && e.verified)?.email || emails[0]?.email || '';
-            const ghUsername = buildGithubUsername(user.name, user.login);
+            const primaryEmail = emails.find((e: any) => e.primary && e.verified)?.email || emails[0]?.email || '';
+            const ghUsername = buildGithubUsername(ghUser.name, ghUser.login);
             const loginEmail = primaryEmail || `${ghUsername}@github.local`;
-            
+
             const firstOrgId = orgs[0]?._id;
-            
+            if (!firstOrgId) {
+              setGhError('No organization found. Please set up an org first.');
+              setGhAuthStep('idle');
+              return;
+            }
+
             const finalUserId = await createUserMutation.mutateAsync({
-              name: user.name || user.login,
+              name: ghUser.name || ghUser.login,
               username: ghUsername,
               email: loginEmail,
-              avatar: user.avatar_url,
+              avatar: ghUser.avatar_url,
               orgId: firstOrgId,
             });
-            
+
+            if (!finalUserId) {
+              throw new Error('User creation returned no ID');
+            }
+
             login(loginEmail, finalUserId);
-            addToast({ type: 'success', message: `Welcome, ${user.name || user.login}!` });
+            addToast({ type: 'success', message: `Welcome, ${ghUser.name || ghUser.login}!` });
             setGhAuthStep('complete');
             setTimeout(() => {
               setGhAuthStep('idle');
@@ -87,7 +98,7 @@ export function LoginModal({ onClose }: LoginModalProps) {
           setGhAuthStep('idle');
         }
       };
-      
+
       setTimeout(poll, 2000);
     } catch (err: any) {
       addToast({ type: 'error', message: err.message || 'Failed to start GitHub auth' });
@@ -161,7 +172,7 @@ export function LoginModal({ onClose }: LoginModalProps) {
 
     setIsLoading(true);
     setError('');
-    
+
     try {
       const exists = MOCK_ACCOUNTS.find((a) => a.email.toLowerCase() === email.toLowerCase());
       if (exists) {
@@ -172,12 +183,20 @@ export function LoginModal({ onClose }: LoginModalProps) {
 
       MOCK_ACCOUNTS.push({ email: email.toLowerCase(), name: username.trim(), password });
       const firstOrgId = orgs[0]?._id;
+      if (!firstOrgId) {
+        setError('No organization available. Please contact admin.');
+        setIsLoading(false);
+        return;
+      }
       const finalUserId = await createUserMutation.mutateAsync({
         name: username.trim(),
         username: username.trim().toLowerCase().replace(/\s+/g, ''),
         email: email.toLowerCase(),
         orgId: firstOrgId,
       });
+      if (!finalUserId) {
+        throw new Error('User creation failed - no ID returned');
+      }
       login(email.toLowerCase(), finalUserId);
       setRegistered(username.trim());
       addToast({ type: 'success', message: `Welcome, ${username.trim()}! Account created.` });
@@ -349,6 +368,15 @@ export function LoginModal({ onClose }: LoginModalProps) {
               <div className="terminal-line">
                 <span style={{ color: 'var(--red)' }}>error:</span>
                 <span style={{ color: 'var(--fg)', fontSize: 12 }}> {error}</span>
+              </div>
+            </div>
+          )}
+
+          {ghError && (
+            <div className="terminal-block" style={{ background: 'rgba(247, 118, 142, 0.08)', borderLeft: '3px solid var(--red)', padding: 10, marginBottom: 12 }}>
+              <div className="terminal-line">
+                <span style={{ color: 'var(--red)' }}>error:</span>
+                <span style={{ color: 'var(--fg)', fontSize: 12 }}> {ghError}</span>
               </div>
             </div>
           )}

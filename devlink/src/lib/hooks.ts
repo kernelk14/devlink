@@ -1,6 +1,9 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useUIStore } from './store';
 import { useChannels as useConvexChannels, useUsers as useConvexUsers, useMessages as useConvexMessages } from '../hooks/useData';
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const EMPTY_ARRAY: any[] = [];
 
 export function useChannels() {
   const currentOrgId = useUIStore((state) => state.currentOrgId);
@@ -8,30 +11,30 @@ export function useChannels() {
   // Pass orgId only if it looks like a real Convex ID (not a mock like 'o1')
   const queryOrgId = currentOrgId && !currentOrgId.match(/^o\d+$/) ? currentOrgId : undefined;
   const { data: channelsData, isLoading, isError } = useConvexChannels(queryOrgId, currentUserId || undefined);
-  
+
   // Ensure channels is always an array, never undefined
   const channels = useMemo(() => {
-    if (!channelsData) return [];
+    if (!channelsData) return EMPTY_ARRAY;
     // Map Convex format to expected format
     return channelsData.map((c: any) => ({
       id: c._id,
       name: c.name,
       type: c.type,
       description: c.description,
-      members: c.members || [],
+      members: c.members || EMPTY_ARRAY,
       unreadCount: c.unreadCount || 0,
     }));
   }, [channelsData]);
-  
+
   return { channels, isLoading, isError };
 }
 
 export function useUsers() {
   const { data: usersData, isLoading, isError } = useConvexUsers();
-  
+
   // Ensure users is always an array, never undefined
   const users = useMemo(() => {
-    if (!usersData) return [];
+    if (!usersData) return EMPTY_ARRAY;
     // Map Convex format to expected format
     return usersData.map((u: any) => ({
       id: u._id,
@@ -44,7 +47,7 @@ export function useUsers() {
       color: u.color,
     }));
   }, [usersData]);
-  
+
   return { users, isLoading, isError };
 }
 
@@ -85,71 +88,23 @@ export function usePreferences() {
   return { preferences, updatePreferences, toggleSidebar, toggleThreads };
 }
 
-export function useAuth() {
-  const isAuthenticated = useUIStore((state) => state.isAuthenticated);
-  const login = useUIStore((state) => state.login);
-  const logout = useUIStore((state) => state.logout);
-  const currentUserStatus = useUIStore((state) => state.currentUserStatus);
-
-  const user = useMemo(() => {
-    if (!isAuthenticated) return null;
-    return {
-      name: 'Alex Chen',
-      email: 'alex@devlink.io',
-      status: currentUserStatus,
-    };
-  }, [isAuthenticated, currentUserStatus]);
-
-  return {
-    user,
-    isAuthenticated,
-    login: (username: string, password: string) => {
-      return login(username, 'hook-user');
-    },
-    logout,
-  };
-}
-
-export function useMessages(channelId: string) {
-  const { data: messagesData, isLoading, isError } = useConvexMessages(channelId);
-  
-  // Ensure messages is always an array, never undefined
-  const messages = useMemo(() => {
-    if (!messagesData) return [];
-    // Map Convex format to expected format
-    return messagesData.map((m: any) => ({
-      id: m._id,
-      channelId: m.channelId,
-      authorId: m.authorId,
-      content: m.content,
-      timestamp: new Date(m.createdAt).toISOString(),
-      isEdited: m.isEdited,
-      isPinned: m.isPinned,
-      reactions: m.reactions || [],
-      replies: m.replies || 0,
-    }));
-  }, [messagesData]);
-  
-  return { messages, isLoading, isError };
-}
-
 export function useKeyboardShortcuts() {
   const { toggleSettings, toggleShortcutsModal } = useUIStore();
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const isMeta = e.metaKey || e.ctrlKey;
-      
+
       if (isMeta && e.key === 'k') {
         e.preventDefault();
         useUIStore.getState().toggleSearch();
       }
-      
+
       if (isMeta && e.key === ',') {
         e.preventDefault();
         toggleSettings();
       }
-      
+
       if (e.key === '?' && !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
         toggleShortcutsModal();
       }
@@ -166,4 +121,29 @@ export function useToast() {
   const toasts = useUIStore((state) => state.toasts);
 
   return { toasts, addToast, removeToast };
+}
+
+// Debounce hook for production-ready rate limiting
+export function useDebounce<T extends (...args: any[]) => any>(fn: T, delay: number) {
+  const timeoutRef = useRef<number | null>(null);
+
+  const debouncedFn = useCallback((...args: Parameters<T>) => {
+    if (timeoutRef.current !== null) {
+      clearTimeout(timeoutRef.current);
+    }
+    timeoutRef.current = window.setTimeout(() => {
+      fn(...args);
+      timeoutRef.current = null;
+    }, delay);
+  }, [fn, delay]) as T;
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current !== null) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
+
+  return debouncedFn;
 }

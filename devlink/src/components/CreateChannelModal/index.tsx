@@ -19,17 +19,22 @@ export function CreateChannelModal({ onClose }: CreateChannelModalProps) {
 
   const handleCreate = () => {
     if (!channelName.trim() || !currentOrgId) return;
-    
+
     createChannelMutation.mutate({
       name: channelName.trim().toLowerCase().replace(/\s+/g, '-'),
       type: channelType,
       description,
       orgId: currentOrgId,
-      createdBy: (currentUser || 'guest') as any,
+      createdBy: (currentUser || 'guest') as unknown as string,
     }, {
-      onSuccess: () => {
-        addToast({ type: 'success', message: `Channel #${channelName.trim()} created successfully` });
-        onClose();
+      onSuccess: (newChannel: any) => {
+        if (newChannel?._id) {
+          addToast({ type: 'success', message: `Channel #${channelName.trim()} created successfully` });
+          setSelectedChannel(newChannel._id);
+          onClose();
+        } else {
+          addToast({ type: 'error', message: 'Channel creation returned invalid response' });
+        }
       },
       onError: () => {
         addToast({ type: 'error', message: 'Failed to create channel' });
@@ -73,6 +78,7 @@ export function CreateChannelModal({ onClose }: CreateChannelModalProps) {
                 placeholder="channel-name"
                 value={channelName}
                 onChange={(e) => setChannelName(e.target.value.toLowerCase().replace(/\s/g, '-'))}
+                maxLength={40}
               />
             </div>
           </div>
@@ -80,7 +86,7 @@ export function CreateChannelModal({ onClose }: CreateChannelModalProps) {
           <div className="form-group">
             <label className="form-label">type</label>
             <div className="channel-type-selector">
-              <div 
+              <div
                 className={`channel-type-option ${channelType === 'public' ? 'active' : ''}`}
                 onClick={() => setChannelType('public')}
               >
@@ -90,7 +96,7 @@ export function CreateChannelModal({ onClose }: CreateChannelModalProps) {
                 <div className="channel-type-name">public</div>
                 <div className="channel-type-desc">anyone can join</div>
               </div>
-              <div 
+              <div
                 className={`channel-type-option ${channelType === 'private' ? 'active' : ''}`}
                 onClick={() => setChannelType('private')}
               >
@@ -116,6 +122,7 @@ export function CreateChannelModal({ onClose }: CreateChannelModalProps) {
               onChange={(e) => setDescription(e.target.value)}
               rows={2}
               style={{ resize: 'vertical' }}
+              maxLength={200}
             />
           </div>
         </div>
@@ -124,13 +131,13 @@ export function CreateChannelModal({ onClose }: CreateChannelModalProps) {
           <button className="btn btn-secondary" onClick={onClose}>
             cancel
           </button>
-          <button 
-            className="btn btn-primary" 
+          <button
+            className="btn btn-primary"
             onClick={handleCreate}
-            disabled={!channelName.trim()}
+            disabled={!channelName.trim() || createChannelMutation.isPending}
           >
             <Check size={14} />
-            create
+            {createChannelMutation.isPending ? 'creating...' : 'create'}
           </button>
         </div>
       </div>

@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect } from 'react';
-import { useUIStore, getCurrentUser } from '@/lib/store';
-import { useSendMessage, useUser } from '@/hooks/useData';
-import { Paperclip, Bold, Italic, Code, Link2, Smile, Zap } from 'lucide-react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { useUIStore } from '@/lib/store';
+import { useSendMessage } from '@/hooks/useData';
+import { Paperclip, Bold, Italic, Code, Link2, Smile, Zap, RefreshCw } from 'lucide-react';
 
 export function MessageComposer() {
   const sendMessageMutation = useSendMessage();
@@ -9,9 +9,11 @@ export function MessageComposer() {
   const clearMessageDraft = useUIStore((state) => state.clearMessageDraft);
   const selectedChannelId = useUIStore((s) => s.selectedChannelId);
   const currentUserId = useUIStore((s) => s.currentUserId);
+  const addToast = useUIStore((state) => state.addToast);
   const messageDrafts = useUIStore((s) => s.messageDrafts);
   const [message, setMessage] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
+  const [isSending, setIsSending] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const quickEmojis = ['😀', '😂', '😍', '👍', '🎉', '🚀', '💡', '❤️', '🔥', '😎', '🤔', '👏'];
@@ -26,13 +28,13 @@ export function MessageComposer() {
 
   // Load/save drafts for the current channel
   useEffect(() => {
-    // load draft for selected channel when it changes
-    const draft = messageDrafts[selectedChannelId] || '';
+    const draft = selectedChannelId ? messageDrafts[selectedChannelId] || '' : '';
     setMessage(draft);
-  }, [selectedChannelId]);
+  }, [selectedChannelId, messageDrafts]);
 
   // persist drafts as the user types (debounced)
   useEffect(() => {
+    if (!selectedChannelId) return;
     const tid = setTimeout(() => {
       if (message.trim()) setMessageDraft(selectedChannelId, message);
       else clearMessageDraft(selectedChannelId);
@@ -40,26 +42,46 @@ export function MessageComposer() {
     return () => clearTimeout(tid);
   }, [message, selectedChannelId, setMessageDraft, clearMessageDraft]);
 
-  const { data: currentUserData } = useUser(currentUserId || undefined);
+  const handleSend = useCallback(async () => {
+    if (!message.trim() || !selectedChannelId || !currentUserId) return;
+    if (sendMessageMutation.isPending) return; // prevent double-send
 
-  const handleSend = () => {
+    setIsSending(true);
+    try {
+      await sendMessageMutation.mutateAsync({
+        channelId: selectedChannelId,
+        content: message.trim(),
+        authorId: currentUserId,
+      });
+      clearMessageDraft(selectedChannelId);
+      setMessage('');
+      setShowEmoji(false);
+    } catch (err: any) {
+      addToast({
+        type: 'error',
+        message: err.message || 'Failed to send message. Check connection.',
+        duration: 5000,
+      });
+    } finally {
+      setIsSending(false);
+    }
+  }, [message, selectedChannelId, currentUserId, sendMessageMutation, clearMessageDraft, addToast]);
+
+  const handleRetry = useCallback(() => {
     if (!message.trim() || !selectedChannelId || !currentUserId) return;
     sendMessageMutation.mutate({
       channelId: selectedChannelId,
       content: message.trim(),
       authorId: currentUserId,
     });
-    // clear draft for this channel
-    clearMessageDraft(selectedChannelId);
-    setMessage('');
-  };
+  }, [message, selectedChannelId, currentUserId, sendMessageMutation]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       handleSend();
     }
-    if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
       e.preventDefault();
       handleSend();
     }
@@ -94,12 +116,12 @@ export function MessageComposer() {
     }
   };
 
-  const userName = currentUserData?.name?.split(' ')[0] || 'user';
+  const hasError = sendMessageMutation.isError;
 
   return (
     <div className="composer">
       <div className="composer-prompt-line">
-        <span className="prompt-user">{userName}</span>
+        <span className="prompt-user">{currentUserId?.substring(0, 8) || 'guest'}</span>
         <span className="prompt-at">@</span>
         <span className="prompt-host">devlink</span>
         <span className="prompt-symbol">$</span>
@@ -137,24 +159,41 @@ export function MessageComposer() {
           <textarea
             ref={textareaRef}
             className="composer-textarea"
-            placeholder="Message #channel..."
+            placeholder={selectedChannelId ? "Message #channel..." : "Select a channel to send a message..."}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={handleKeyDown}
             rows={1}
+            disabled={isSending || !selectedChannelId}
           />
           <button
-            className="composer-send"
-            onClick={handleSend}
-            disabled={!message.trim()}
-            title="Send (Ctrl+Enter)"
+            className={`composer-send ${hasError ? 'composer-send-error' : ''}`}
+            onClick={hasError ? handleRetry : handleSend}
+            disabled={!message.trim() || isSending || !selectedChannelId}
+            title={hasError ? "Retry (click)" : "Send (Ctrl+Enter)"}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="22" y1="2" x2="11" y2="13"/>
-              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-            </svg>
+            {hasError ? (
+              <RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} />
+            ) : isSending ? (
+              <span className="sending-dot" />
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="22" y1="2" x2="11" y2="13"/>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+              </svg>
+            )}
           </button>
         </div>
+        {sendMessageMutation.isPending && (
+          <div className="composer-sending-indicator">
+            <span className="sending-text">Sending...</span>
+          </div>
+        )}
+        {sendMessageMutation.isError && (
+          <div className="composer-error-hint" style={{ color: 'var(--red)', fontSize: 11, marginTop: 4 }}>
+            Failed to send. {sendMessageMutation.error?.message || 'Please check your connection and try again.'}
+          </div>
+        )}
         {showEmoji && (
           <div className="composer-emoji-picker">
             {quickEmojis.map(emoji => (
@@ -170,6 +209,7 @@ export function MessageComposer() {
           <span className="hint-sep">·</span>
           <span className="hint-key">Shift+Enter</span>
           <span className="hint-text">new line</span>
+          {hasError && <span className="hint-text" style={{ color: 'var(--red)' }}> · Failed — click button to retry</span>}
         </div>
       </div>
     </div>

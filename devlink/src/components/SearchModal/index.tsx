@@ -27,11 +27,10 @@ export function SearchModal({ onClose }: SearchModalProps) {
     }
 
     const q = query.toLowerCase();
-    const searchMessages: any[] = [];
 
     const searchChannels = channels
       .filter((c: any) => c.name.toLowerCase().includes(q))
-      .slice(0, 3)
+      .slice(0, 5)
       .map((c: any) => ({
         type: 'channel',
         id: c._id,
@@ -40,17 +39,27 @@ export function SearchModal({ onClose }: SearchModalProps) {
       }));
 
     const searchUsers = users
-      .filter(u => u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q))
-      .slice(0, 3)
-      .map(u => ({
+      .filter((u: any) => u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q))
+      .slice(0, 5)
+      .map((u: any) => ({
         type: 'user',
         id: u._id,
         title: `@${u.name || u.email}`,
         preview: u.statusMessage || u.email || 'Online',
       }));
 
-    setResults([...searchChannels, ...searchUsers, ...searchMessages]);
+    setResults([...searchChannels, ...searchUsers]);
   }, [query, channels, users]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   const handleSelect = (result: any) => {
     if (result.type === 'channel') {
@@ -59,9 +68,6 @@ export function SearchModal({ onClose }: SearchModalProps) {
     } else if (result.type === 'user') {
       setSelectedDMUser(result.id);
       addToast({ type: 'info', message: `Opened DM with ${result.title}` });
-    } else {
-      setSelectedChannel(result.channelId);
-      addToast({ type: 'info', message: `Jumped to message by ${result.title}` });
     }
     onClose();
   };
@@ -87,7 +93,7 @@ export function SearchModal({ onClose }: SearchModalProps) {
               ref={inputRef}
               type="text"
               className="search-input"
-              placeholder="search channels and messages..."
+              placeholder="search channels and users..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => {
@@ -115,10 +121,10 @@ export function SearchModal({ onClose }: SearchModalProps) {
               </div>
             )}
 
-            {results.filter(r => r.type === 'channel').length > 0 && (
+            {results.filter((r: any) => r.type === 'channel').length > 0 && (
               <div className="search-section">
                 <div className="search-section-title">// channels</div>
-                {results.filter(r => r.type === 'channel').map((result) => (
+                {results.filter((r: any) => r.type === 'channel').map((result: any) => (
                   <div key={result.id} className="search-result" onClick={() => handleSelect(result)} style={{ cursor: 'pointer' }}>
                     <div className="search-result-icon">
                       <Hash size={14} />
@@ -132,27 +138,10 @@ export function SearchModal({ onClose }: SearchModalProps) {
               </div>
             )}
 
-            {results.filter(r => r.type === 'message').length > 0 && (
-              <div className="search-section">
-                <div className="search-section-title">// messages</div>
-                {results.filter(r => r.type === 'message').map((result) => (
-                  <div key={result.id} className="search-result" onClick={() => handleSelect(result)} style={{ cursor: 'pointer' }}>
-                    <div className="search-result-icon">
-                      <MessageSquare size={14} />
-                    </div>
-                    <div className="search-result-content">
-                       <div className="search-result-title">{result.title}</div>
-                      <div className="search-result-preview">{result.preview}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {results.filter(r => r.type === 'user').length > 0 && (
+            {results.filter((r: any) => r.type === 'user').length > 0 && (
               <div className="search-section">
                 <div className="search-section-title">// users</div>
-                {results.filter(r => r.type === 'user').map((result) => (
+                {results.filter((r: any) => r.type === 'user').map((result: any) => (
                   <div key={result.id} className="search-result" onClick={() => handleSelect(result)} style={{ cursor: 'pointer' }}>
                     <div className="search-result-icon">
                       <User size={14} />

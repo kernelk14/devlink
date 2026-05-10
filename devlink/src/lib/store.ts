@@ -34,6 +34,14 @@ export interface CurrentUser {
   status?: UserStatus;
 }
 
+export interface FailedMessage {
+  id: string;
+  channelId: string;
+  content: string;
+  authorId: string;
+  timestamp: number;
+}
+
 interface UIState {
   selectedChannelId: string;
   selectedThreadId: string | null;
@@ -64,7 +72,8 @@ interface UIState {
   currentUserId: string;
   editingMessage: string | null;
   sidebarCollapsed: boolean;
-  failedMessages: Set<string>;
+  failedMessages: FailedMessage[];
+  isOnline: boolean;
   setSelectedChannel: (channelId: string) => void;
   setSelectedDMUser: (userId: string | null) => void;
   setSelectedThread: (threadId: string | null) => void;
@@ -98,9 +107,11 @@ interface UIState {
   addToast: (toast: Omit<Toast, 'id'>) => void;
   removeToast: (id: string) => void;
   setEditingMessage: (id: string | null) => void;
-  addFailedMessage: (messageId: string) => void;
+  addFailedMessage: (msg: Omit<FailedMessage, 'id'>) => void;
   removeFailedMessage: (messageId: string) => void;
   clearFailedMessages: () => void;
+  retryFailedMessage: (messageId: string) => void;
+  setOnlineStatus: (online: boolean) => void;
 }
 
 
@@ -126,7 +137,7 @@ export const useUIStore = create<UIState>()(
       isAuthenticated: false,
       currentEmail: '',
       currentOrgId: 'o1',
-      currentUserStatus: 'online',
+      currentUserStatus: 'online' as UserStatus,
       unreadChannels: [],
       typingUsers: {},
       messageDrafts: {},
@@ -135,10 +146,11 @@ export const useUIStore = create<UIState>()(
       toasts: [],
       currentUserId: '',
       editingMessage: null,
-       sidebarCollapsed: false,
-       failedMessages: new Set<string>(),
-       
-       setSelectedChannel: (channelId) => set((state) => {
+      sidebarCollapsed: false,
+      failedMessages: [],
+      isOnline: true,
+
+      setSelectedChannel: (channelId) => set((state) => {
         state.selectedChannelId = channelId;
         state.selectedThreadId = null;
         state.isThreadPanelOpen = false;
@@ -148,7 +160,7 @@ export const useUIStore = create<UIState>()(
         state.highlightedMessageId = null;
         state.selectedDMUserId = null;
       }),
-      
+
       setSelectedDMUser: (userId) => set((state) => {
         state.selectedDMUserId = userId;
         if (userId) {
@@ -157,77 +169,77 @@ export const useUIStore = create<UIState>()(
           state.unreadChannels = state.unreadChannels.filter(c => c !== dmKey);
         }
       }),
-      
+
       setSelectedThread: (threadId) => set((state) => {
         state.selectedThreadId = threadId;
         if (threadId) state.isThreadPanelOpen = true;
       }),
-      
+
       setSearchQuery: (query) => set((state) => {
         state.searchQuery = query;
       }),
-      
+
       toggleThreadPanel: (open) => set((state) => {
         state.isThreadPanelOpen = open ?? !state.isThreadPanelOpen;
       }),
-      
+
       toggleSearch: (open) => set((state) => {
         state.isSearchOpen = open ?? !state.isSearchOpen;
       }),
-      
+
       toggleMembers: (open) => set((state) => {
         state.isMembersOpen = open ?? !state.isMembersOpen;
       }),
-      
+
       togglePinned: (open) => set((state) => {
         state.isPinnedOpen = open ?? !state.isPinnedOpen;
       }),
-      
+
       toggleSettings: (open) => set((state) => {
         state.isSettingsOpen = open ?? !state.isSettingsOpen;
       }),
-      
+
       toggleChannelSettings: (open) => set((state) => {
         state.isChannelSettingsOpen = open ?? !state.isChannelSettingsOpen;
       }),
-      
+
       toggleInviteModal: (open) => set((state) => {
         state.isInviteModalOpen = open ?? !state.isInviteModalOpen;
       }),
-      
+
       toggleShortcutsModal: (open) => set((state) => {
         state.isShortcutsModalOpen = open ?? !state.isShortcutsModalOpen;
       }),
-      
+
       toggleUserProfile: (open) => set((state) => {
         state.isUserProfileOpen = open ?? !state.isUserProfileOpen;
       }),
-      
+
       toggleSidebar: (open) => set((state) => {
         state.sidebarCollapsed = open ?? !state.sidebarCollapsed;
       }),
-      
+
       setViewingUser: (userId) => set((state) => {
         state.viewingUserId = userId;
         state.isUserProfileOpen = userId !== null;
       }),
-      
+
       setShowCreateChannel: (show) => set((state) => {
         state.showCreateChannel = show;
       }),
-      
+
       highlightMessage: (messageId) => set((state) => {
         state.highlightedMessageId = messageId;
         state.isPinnedOpen = false;
         state.isSearchOpen = false;
         state.isMembersOpen = false;
       }),
-      
+
       clearHighlight: () => set((state) => {
         state.highlightedMessageId = null;
       }),
-      
-      login: (email: string, userId: string) => set((state) => {
+
+      login: (email, userId) => set((state) => {
         state.isAuthenticated = true;
         state.currentEmail = email;
         state.currentUserId = userId;
@@ -240,26 +252,27 @@ export const useUIStore = create<UIState>()(
         state.selectedChannelId = '';
         state.selectedDMUserId = null;
         state.currentUserStatus = 'offline';
+        state.isOnline = false;
       }),
-      
+
       switchOrg: (orgId) => set((state) => {
         state.currentOrgId = orgId;
       }),
-      
+
       setCurrentUserStatus: (status) => set((state) => {
         state.currentUserStatus = status;
       }),
-      
+
       markChannelRead: (channelId) => set((state) => {
         state.unreadChannels = state.unreadChannels.filter(id => id !== channelId);
       }),
-      
+
       markChannelUnread: (channelId) => set((state) => {
         if (!state.unreadChannels.includes(channelId)) {
           state.unreadChannels.push(channelId);
         }
       }),
-      
+
       setTyping: (channelId, userId) => set((state) => {
         if (!state.typingUsers[channelId]) {
           state.typingUsers[channelId] = [];
@@ -268,21 +281,21 @@ export const useUIStore = create<UIState>()(
           state.typingUsers[channelId].push(userId);
         }
       }),
-      
+
       clearTyping: (channelId, userId) => set((state) => {
         if (state.typingUsers[channelId]) {
           state.typingUsers[channelId] = state.typingUsers[channelId].filter(id => id !== userId);
         }
       }),
-      
+
       setMessageDraft: (channelId, content) => set((state) => {
         state.messageDrafts[channelId] = content;
       }),
-      
+
       clearMessageDraft: (channelId) => set((state) => {
         delete state.messageDrafts[channelId];
       }),
-      
+
       toggleStarredChannel: (channelId) => set((state) => {
         const idx = state.starredChannels.indexOf(channelId);
         if (idx >= 0) {
@@ -291,7 +304,7 @@ export const useUIStore = create<UIState>()(
           state.starredChannels.push(channelId);
         }
       }),
-      
+
       toggleSavedMessage: (messageId) => set((state) => {
         const idx = state.savedMessages.indexOf(messageId);
         if (idx >= 0) {
@@ -300,18 +313,17 @@ export const useUIStore = create<UIState>()(
           state.savedMessages.push(messageId);
         }
       }),
-      
+
       addToast: (toast) => set((state) => {
         const id = `toast-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         state.toasts.push({ ...toast, id });
-        
         if (toast.duration !== 0) {
           setTimeout(() => {
-            get().removeToast(id);
+            state.toasts = state.toasts.filter(t => t.id !== id);
           }, toast.duration || 4000);
         }
       }),
-      
+
       removeToast: (id) => set((state) => {
         state.toasts = state.toasts.filter(t => t.id !== id);
       }),
@@ -320,16 +332,32 @@ export const useUIStore = create<UIState>()(
         state.editingMessage = id;
       }),
 
-      addFailedMessage: (messageId) => set((state) => {
-        state.failedMessages.add(messageId);
+      addFailedMessage: (msg) => set((state) => {
+        const id = `failed-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+        state.failedMessages.push({ ...msg, id });
       }),
 
       removeFailedMessage: (messageId) => set((state) => {
-        state.failedMessages.delete(messageId);
+        state.failedMessages = state.failedMessages.filter(m => m.id !== messageId);
       }),
 
       clearFailedMessages: () => set((state) => {
-        state.failedMessages.clear();
+        state.failedMessages = [];
+      }),
+
+      retryFailedMessage: (messageId) => set((state) => {
+        const msg = state.failedMessages.find(m => m.id === messageId);
+        if (msg) {
+          // The actual retry is handled by the component
+          state.failedMessages = state.failedMessages.filter(m => m.id !== messageId);
+        }
+      }),
+
+      setOnlineStatus: (online) => set((state) => {
+        state.isOnline = online;
+        if (!online) {
+          state.currentUserStatus = 'offline' as UserStatus;
+        }
       }),
     })),
     {
@@ -346,6 +374,8 @@ export const useUIStore = create<UIState>()(
         starredChannels: state.starredChannels,
         currentUserStatus: state.currentUserStatus,
         currentUserId: state.currentUserId,
+        failedMessages: state.failedMessages,
+        isOnline: state.isOnline,
       }),
     }
   )
