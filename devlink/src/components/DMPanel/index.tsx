@@ -16,7 +16,6 @@ export function DMPanel() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const prevDMUserId = useRef<string | null>(null);
-  const messageSentRef = useRef(false);
 
   const { selectedDMUserId, setSelectedDMUser, currentUserId, currentOrgId, addToast } = useUIStore();
   const { data: otherUser, isLoading: userLoading } = useUser(selectedDMUserId || undefined);
@@ -30,23 +29,24 @@ export function DMPanel() {
       if (prevDMUserId.current !== selectedDMUserId) {
         prevDMUserId.current = selectedDMUserId;
         setConversationId(null);
-        messageSentRef.current = false;
 
         async function initDM() {
+          const dmUserId = selectedDMUserId;
+          const dmOrgId = currentOrgId;
+          const dmCurrentUserId = currentUserId;
+          if (!dmUserId || !dmCurrentUserId || !dmOrgId) return;
           try {
-            if (!selectedDMUserId) return;
             const result = await orCreateDMMutation.mutateAsync({
-              user1Id: currentUserId,
-              user2Id: selectedDMUserId,
-              orgId: currentOrgId,
+              user1Id: dmCurrentUserId,
+              user2Id: dmUserId,
+              orgId: dmOrgId,
             });
             const id = typeof result === 'string' ? result : String(result);
             if (id) {
               setConversationId(id);
             }
           } catch (err: any) {
-            console.error('Failed to init DM:', err);
-            addToast({ type: 'error', message: 'Failed to start direct message: ' + (err.message || 'Unknown error') });
+            addToast({ type: 'error', message: 'Failed to start DM: ' + (err.message || 'Unknown error') });
           }
         }
         initDM();
@@ -76,25 +76,25 @@ export function DMPanel() {
     }
   }, [message]);
 
+  // Clear message input after successful send (observing mutation state)
+  const prevStatusRef = useRef(sendMessageMutation.status);
+  useEffect(() => {
+    if (prevStatusRef.current === 'pending' && sendMessageMutation.status === 'success') {
+      setMessage('');
+      setShowEmoji(false);
+    }
+    prevStatusRef.current = sendMessageMutation.status;
+  }, [sendMessageMutation.status]);
+
   const handleSend = useCallback(() => {
     if (!message.trim() || !conversationId || !currentUserId) return;
     if (sendMessageMutation.isPending) return;
 
-    messageSentRef.current = true;
+    // Use mutate (not mutateAsync) so hook-level onMutate/onSuccess/onError/onSettled all fire
     sendMessageMutation.mutate({
       channelId: conversationId,
       content: message.trim(),
       authorId: currentUserId,
-    }, {
-      onSuccess: () => {
-        setMessage('');
-        setShowEmoji(false);
-        messageSentRef.current = false;
-      },
-      onError: () => {
-        setMessage(message.trim()); // Keep message for retry
-        messageSentRef.current = false;
-      },
     });
   }, [message, conversationId, currentUserId, sendMessageMutation]);
 
@@ -143,7 +143,7 @@ export function DMPanel() {
         </div>
         <button
           className="dm-menu-btn"
-          onClick={() => addToast({ type: 'info', message: `DM info with ${otherUserName}` })}
+          onClick={() => addToast({ type: 'info', message: `DM with ${otherUserName}` })}
         >
           <MoreHorizontal size={18} />
         </button>
@@ -192,7 +192,7 @@ export function DMPanel() {
       <div className="dm-composer">
         {sendError && (
           <div style={{ color: 'var(--red)', fontSize: 11, padding: '4px 0', textAlign: 'center' }}>
-            Failed to send — click Send to retry
+            Failed to send — type and click Send to retry
           </div>
         )}
         <div className="dm-composer-inner">
