@@ -1,7 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useUIStore, getCurrentUser } from '@/lib/store';
-import { useChannels, useMessages } from '@/lib/hooks';
-import { useAddReaction } from '@/hooks/useData';
+import { useAddReaction, useUsers, useMessages, useChannels } from '@/hooks/useData';
 import { format, isToday, isYesterday, isSameDay } from 'date-fns';
 import { formatDistanceToNow } from 'date-fns';
 import ReactMarkdown from 'react-markdown';
@@ -11,14 +10,20 @@ import { CodeBlock } from '@/components/ui/CodeBlock';
 import { Avatar } from '@/components/ui/Avatar';
 
 export function MessageList() {
-  const { selectedChannelId } = useUIStore();
-  const { channels } = useChannels();
-  const { messages } = useMessages(selectedChannelId);
+  const { selectedChannelId, currentUserId } = useUIStore();
+  const { data: channels = [] } = useChannels();
+  const { data: messages = [] } = useMessages(selectedChannelId);
+  const { data: users = [] } = useUsers();
   const addReactionMutation = useAddReaction();
-  const currentUser = getCurrentUser();
 
-  const channel = channels.find(c => c.id === selectedChannelId);
+  const channel = channels.find((c: any) => c._id === selectedChannelId);
   const channelMessages = messages;
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages.length, selectedChannelId]);
 
   const renderDateDivider = (date: Date) => {
     let label = format(date, 'EEEE, MMMM d, yyyy');
@@ -34,18 +39,20 @@ export function MessageList() {
 
   const renderMessage = (message: any, index: number) => {
     const prev = channelMessages[index - 1];
-    const needsDivider = !prev || !isSameDay(new Date(prev.timestamp), new Date(message.timestamp));
-    const userName = message.user?.name?.split(' ')[0] || 'unknown';
+    const needsDivider = !prev || !isSameDay(new Date(prev.createdAt), new Date(message.createdAt));
+    const user = users.find(u => u._id === message.authorId) as any;
+    const userName = user?.name?.split(' ')[0] || 'unknown';
     const prevMsg = channelMessages[index - 1];
-    const sameAuthor = prevMsg && prevMsg.user?.name === message.user?.name;
+    const prevUser = users.find(u => u._id === prevMsg?.authorId) as any;
+    const sameAuthor = prevMsg && prevUser?.name === user?.name;
 
     return (
-      <div key={message.id} className="msg-entry">
-        {needsDivider && renderDateDivider(new Date(message.timestamp))}
+      <div key={message._id} className="msg-entry">
+        {needsDivider && renderDateDivider(new Date(message.createdAt))}
         <div className="msg-line">
           <div className="msg-avatar-col">
             {!sameAuthor && (
-              <Avatar name={message.user?.name || '?'} size="sm" />
+              <Avatar name={user?.name || '?'} size="sm" />
             )}
           </div>
           <span className={`msg-prompt ${sameAuthor ? 'msg-prompt-continue' : ''}`}>
@@ -79,11 +86,11 @@ export function MessageList() {
                     key={i} 
                     className="reaction-badge" 
                     onClick={() => {
-                      if (currentUser?.id) {
+                      if (currentUserId) {
                         addReactionMutation.mutate({
-                          messageId: message.id,
+                          messageId: message._id,
                           emoji: r.emoji,
-                          userId: currentUser.id,
+                          userId: currentUserId,
                         });
                       }
                     }}
@@ -95,7 +102,7 @@ export function MessageList() {
               </div>
             )}
             <div className="msg-meta">
-              <span className="msg-time">{formatDistanceToNow(new Date(message.timestamp), { addSuffix: true })}</span>
+              <span className="msg-time">{formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}</span>
               <button className="msg-action-btn" title="Copy">
                 <Copy size={11} />
               </button>
@@ -135,6 +142,7 @@ export function MessageList() {
     <div className="msg-container scroll-area">
       <div className="msg-list">
         {channelMessages.map((msg, i) => renderMessage(msg, i))}
+        <div ref={bottomRef} style={{ height: 1 }} />
       </div>
     </div>
   );

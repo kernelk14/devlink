@@ -11,7 +11,7 @@ export function useAuth() {
     user: getCurrentUser(),
     isAuthenticated,
     login: async (username: string, password: string) => {
-      return login(username);
+      return login(username, 'auth-user');
     },
     logout,
   };

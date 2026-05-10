@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useUIStore, getCurrentUser } from '@/lib/store';
-import { useSendMessage } from '@/hooks/useData';
+import { useSendMessage, useUser } from '@/hooks/useData';
 import { Paperclip, Bold, Italic, Code, Link2, Smile, Zap } from 'lucide-react';
 
 export function MessageComposer() {
@@ -8,8 +8,8 @@ export function MessageComposer() {
   const setMessageDraft = useUIStore((state) => state.setMessageDraft);
   const clearMessageDraft = useUIStore((state) => state.clearMessageDraft);
   const selectedChannelId = useUIStore((s) => s.selectedChannelId);
+  const currentUserId = useUIStore((s) => s.currentUserId);
   const messageDrafts = useUIStore((s) => s.messageDrafts);
-  const currentUser = getCurrentUser();
   const [message, setMessage] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -40,12 +40,14 @@ export function MessageComposer() {
     return () => clearTimeout(tid);
   }, [message, selectedChannelId, setMessageDraft, clearMessageDraft]);
 
+  const { data: currentUserData } = useUser(currentUserId || undefined);
+
   const handleSend = () => {
-    if (!message.trim() || !selectedChannelId) return;
+    if (!message.trim() || !selectedChannelId || !currentUserId) return;
     sendMessageMutation.mutate({
       channelId: selectedChannelId,
       content: message.trim(),
-      authorId: currentUser?.id || 'guest',
+      authorId: currentUserId,
     });
     // clear draft for this channel
     clearMessageDraft(selectedChannelId);
@@ -92,7 +94,7 @@ export function MessageComposer() {
     }
   };
 
-  const userName = currentUser?.name?.split(' ')[0] || 'user';
+  const userName = currentUserData?.name?.split(' ')[0] || 'user';
 
   return (
     <div className="composer">

@@ -4,15 +4,26 @@ import { channelType } from "./schema";
 
 // Get all channels for an organization
 export const getChannels = query({
-  args: { orgId: v.optional(v.string()) },
+  args: { 
+    orgId: v.optional(v.string()),
+    userId: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
+    let channels = [];
     if (args.orgId) {
-      return await ctx.db
+      channels = await ctx.db
         .query("channels")
         .withIndex("by_org", (q) => q.eq("orgId", args.orgId!))
         .collect();
+    } else {
+      channels = await ctx.db.query("channels").collect();
     }
-    return await ctx.db.query("channels").collect();
+    
+    if (args.userId) {
+      channels = channels.filter(c => c.members.includes(args.userId!));
+    }
+    
+    return channels;
   },
 });
 

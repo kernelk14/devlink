@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useQuery as useConvexQuery, useMutation as useConvexMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
@@ -12,23 +13,20 @@ export function useUsers() {
   // Use Convex query
   const convexUsers = useConvexQuery(api.users.getUsers);
   
-  // Use TanStack Query for caching and offline support
+  // Sync Convex real-time data into TanStack Query cache immediately
+  useEffect(() => {
+    if (convexUsers !== undefined) {
+      queryClient.setQueryData(USERS_QUERY_KEY, convexUsers);
+    }
+  }, [convexUsers]);
+
   return useQuery({
     queryKey: USERS_QUERY_KEY,
     queryFn: async () => {
-      // If Convex data is available, return it
-      if (convexUsers) {
-        return convexUsers;
-      }
-      // Otherwise, return cached data (handled automatically by TanStack Query)
+      if (convexUsers) return convexUsers;
       throw new Error('Waiting for Convex data...');
     },
-    // Use Convex data directly when available
-    placeholderData: convexUsers,
-    // Don't refetch on window focus (Convex handles real-time)
     refetchOnWindowFocus: false,
-    // Keep previous data while loading
-    placeholderData: (previousData) => previousData,
   });
 }
 
@@ -38,6 +36,14 @@ export function useUser(userId: string | undefined) {
     userId ? { userId: userId as any } : 'skip'
   );
   
+  const queryClient = useQueryClient();
+  
+  useEffect(() => {
+    if (convexUser !== undefined) {
+      queryClient.setQueryData(['users', userId], convexUser);
+    }
+  }, [convexUser, userId]);
+
   return useQuery({
     queryKey: ['users', userId],
     queryFn: async () => {
@@ -45,7 +51,7 @@ export function useUser(userId: string | undefined) {
       throw new Error('Waiting for Convex data...');
     },
     enabled: !!userId,
-    placeholderData: convexUser,
+    placeholderData: convexUser ?? undefined,
     refetchOnWindowFocus: false,
   });
 }
@@ -110,18 +116,90 @@ export function useUpdateUserStatus() {
   });
 }
 
+export function useConnectUser() {
+  const queryClient = useQueryClient();
+  const sendRequestConvex = useConvexMutation(api.connections.sendRequest);
+  
+  return useMutation({
+    mutationFn: ({ senderId, receiverId }: { senderId: string, receiverId: string }) => 
+      sendRequestConvex({ senderId: senderId as any, receiverId: receiverId as any }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['connection-requests'] });
+    },
+  });
+}
+
+export function usePendingRequests(userId: string | undefined) {
+  const convexRequests = useConvexQuery(
+    api.connections.getPendingRequests,
+    userId ? { userId: userId as any } : 'skip'
+  );
+  
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (convexRequests !== undefined) {
+      queryClient.setQueryData(['connection-requests', userId], convexRequests);
+    }
+  }, [convexRequests, userId]);
+
+  return useQuery({
+    queryKey: ['connection-requests', userId],
+    queryFn: async () => {
+      if (convexRequests) return convexRequests;
+      throw new Error('Waiting for Convex data...');
+    },
+    enabled: !!userId,
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function useAcceptRequest() {
+  const queryClient = useQueryClient();
+  const acceptRequestConvex = useConvexMutation(api.connections.acceptRequest);
+  
+  return useMutation({
+    mutationFn: (requestId: string) => acceptRequestConvex({ requestId: requestId as any }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['connection-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+    },
+  });
+}
+
+export function useRejectRequest() {
+  const queryClient = useQueryClient();
+  const rejectRequestConvex = useConvexMutation(api.connections.rejectRequest);
+  
+  return useMutation({
+    mutationFn: (requestId: string) => rejectRequestConvex({ requestId: requestId as any }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['connection-requests'] });
+    },
+  });
+}
+
 // ==================== CHANNELS ====================
 
 const CHANNELS_QUERY_KEY = ['channels'];
 
-export function useChannels(orgId?: string) {
+export function useChannels(orgId?: string, userId?: string) {
   const convexChannels = useConvexQuery(
     api.channels.getChannels,
-    orgId ? { orgId } : {}
+    { orgId, userId }
   );
   
+  const queryClient = useQueryClient();
+
+  // Sync Convex real-time data into TanStack Query cache immediately
+  useEffect(() => {
+    if (convexChannels !== undefined) {
+      queryClient.setQueryData([CHANNELS_QUERY_KEY, orgId, userId], convexChannels);
+    }
+  }, [convexChannels, orgId, userId]);
+
   return useQuery({
-    queryKey: [CHANNELS_QUERY_KEY, orgId],
+    queryKey: [CHANNELS_QUERY_KEY, orgId, userId],
     queryFn: async () => {
       if (convexChannels) return convexChannels;
       throw new Error('Waiting for Convex data...');
@@ -144,7 +222,7 @@ export function useChannel(channelId: string | undefined) {
       throw new Error('Waiting for Convex data...');
     },
     enabled: !!channelId,
-    placeholderData: convexChannel,
+    placeholderData: convexChannel ?? undefined,
     refetchOnWindowFocus: false,
   });
 }
@@ -166,6 +244,20 @@ export function useCreateChannel() {
   });
 }
 
+export function useJoinChannel() {
+  const queryClient = useQueryClient();
+  const joinChannelConvex = useConvexMutation(api.channels.joinChannel);
+  
+  return useMutation({
+    mutationFn: ({ channelId, userId }: { channelId: string, userId: string }) => 
+      joinChannelConvex({ channelId: channelId as any, userId: userId as any }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: [CHANNELS_QUERY_KEY] });
+      queryClient.invalidateQueries({ queryKey: ['channels', variables.channelId] });
+    },
+  });
+}
+
 // ==================== MESSAGES ====================
 
 export function useMessages(channelId: string) {
@@ -174,6 +266,16 @@ export function useMessages(channelId: string) {
     channelId ? { channelId } : 'skip'
   );
   
+  const queryClient = useQueryClient();
+
+  // KEY FIX: Sync Convex real-time subscription updates into TanStack Query cache
+  // Without this, new messages from Convex never trigger a re-render in components
+  useEffect(() => {
+    if (convexMessages !== undefined) {
+      queryClient.setQueryData(['messages', channelId], convexMessages);
+    }
+  }, [convexMessages, channelId]);
+
   return useQuery({
     queryKey: ['messages', channelId],
     queryFn: async () => {
@@ -181,7 +283,6 @@ export function useMessages(channelId: string) {
       throw new Error('Waiting for Convex data...');
     },
     enabled: !!channelId,
-    placeholderData: convexMessages,
     refetchOnWindowFocus: false,
   });
 }
@@ -381,7 +482,7 @@ export function useOrganization(orgId: string | undefined) {
       throw new Error('Waiting for Convex data...');
     },
     enabled: !!orgId,
-    placeholderData: convexOrg,
+    placeholderData: convexOrg ?? undefined,
     refetchOnWindowFocus: false,
   });
 }
@@ -395,5 +496,33 @@ export function useCreateOrganization() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ORGS_QUERY_KEY });
     },
+  });
+}
+
+// ==================== DIRECT MESSAGES ====================
+
+export function useOrCreateDM() {
+  const queryClient = useQueryClient();
+  const getOrCreateDMConvex = useConvexMutation(api.dms.getOrCreateDM);
+  
+  return useMutation({
+    mutationFn: ({ user1Id, user2Id, orgId }: { user1Id: string, user2Id: string, orgId: string }) => 
+      getOrCreateDMConvex({ user1Id, user2Id, orgId }),
+  });
+}
+
+export function useMyDMs(userId: string | undefined) {
+  const convexDMs = useConvexQuery(
+    api.dms.getMyDMs,
+    userId ? { userId } : 'skip'
+  );
+  
+  return useQuery({
+    queryKey: ['dms', userId],
+    queryFn: async () => {
+      if (convexDMs) return convexDMs;
+      throw new Error('Waiting for Convex data...');
+    },
+    enabled: !!userId,
   });
 }

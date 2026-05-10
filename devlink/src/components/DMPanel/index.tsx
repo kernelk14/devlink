@@ -1,55 +1,45 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
-import { useUIStore, getCurrentUser } from '@/lib/store';
-import { mockUsers } from '@/lib/api';
+import { useState, useRef, useEffect } from 'react';
+import { useUIStore } from '@/lib/store';
+import { useUser, useOrCreateDM, useMessages, useSendMessage } from '@/hooks/useData';
 import { Avatar } from '../ui/Avatar';
 import { ArrowLeft, Send, Smile, MoreHorizontal } from 'lucide-react';
 import { format, isToday, isYesterday } from 'date-fns';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
-interface DMMessage {
-  id: string;
-  senderId: string;
-  receiverId: string;
-  content: string;
-  createdAt: Date;
-}
-
-const mockDMMessages: Record<string, DMMessage[]> = {
-  'u2-u1': [
-    { id: 'dm1', senderId: 'u2', receiverId: 'u1', content: 'Hey, did you see the new PR?', createdAt: new Date(Date.now() - 3600000) },
-    { id: 'dm2', senderId: 'u1', receiverId: 'u2', content: 'Yeah, looking good! I left a few comments though.', createdAt: new Date(Date.now() - 3000000) },
-  ],
-  'u3-u1': [
-    { id: 'dm3', senderId: 'u3', receiverId: 'u1', content: 'Can we sync on the auth refactor?', createdAt: new Date(Date.now() - 7200000) },
-  ],
-  'u4-u1': [
-    { id: 'dm4', senderId: 'u4', receiverId: 'u1', content: 'The staging server is acting up again.', createdAt: new Date(Date.now() - 900000) },
-  ],
-};
-
 const quickEmojis = ['😀', '😂', '😍', '👍', '🎉', '🚀', '💡', '❤️', '🔥', '😎', '🤔', '👏'];
 
 export function DMPanel() {
   const [message, setMessage] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const currentUser = getCurrentUser();
+  
+  const { selectedDMUserId, setSelectedDMUser, currentUserId, currentOrgId, addToast } = useUIStore();
+  const { data: otherUser, isLoading: userLoading } = useUser(selectedDMUserId || undefined);
+  const orCreateDMMutation = useOrCreateDM();
+  const { data: messages = [], isLoading: messagesLoading } = useMessages(conversationId || undefined);
+  const sendMessageMutation = useSendMessage();
 
-  const { selectedDMUserId, setSelectedDMUser, addToast } = useUIStore();
-
-  const otherUser = useMemo(() => {
-    return mockUsers.find(u => u.id === selectedDMUserId);
-  }, [selectedDMUserId]);
-
-  const dmKey = selectedDMUserId
-    ? selectedDMUserId > currentUser.id
-      ? `${currentUser.id}-${selectedDMUserId}`
-      : `${selectedDMUserId}-${currentUser.id}`
-    : '';
-
-  const messages = mockDMMessages[dmKey] || [];
+  useEffect(() => {
+    async function initDM() {
+      if (selectedDMUserId && currentUserId && currentOrgId) {
+        try {
+          const id = await orCreateDMMutation.mutateAsync({
+            user1Id: currentUserId,
+            user2Id: selectedDMUserId,
+            orgId: currentOrgId
+          });
+          setConversationId(id);
+        } catch (err) {
+          console.error('Failed to init DM:', err);
+          addToast({ type: 'error', message: 'Failed to start direct message' });
+        }
+      }
+    }
+    initDM();
+  }, [selectedDMUserId, currentUserId, currentOrgId]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -65,19 +55,14 @@ export function DMPanel() {
   }, [message]);
 
   const handleSend = () => {
-    if (!message.trim() || !selectedDMUserId) return;
-    const newMsg: DMMessage = {
-      id: `dm${Date.now()}`,
-      senderId: currentUser.id,
-      receiverId: selectedDMUserId,
+    if (!message.trim() || !conversationId || !currentUserId) return;
+    
+    sendMessageMutation.mutate({
+      channelId: conversationId,
       content: message.trim(),
-      createdAt: new Date(),
-    };
-    if (!mockDMMessages[dmKey]) {
-      mockDMMessages[dmKey] = [];
-    }
-    mockDMMessages[dmKey].push(newMsg);
-    addToast({ type: 'info', message: `Message sent to ${otherUser?.name || 'user'}` });
+      authorId: currentUserId,
+    });
+    
     setMessage('');
     setShowEmoji(false);
   };
@@ -129,25 +114,25 @@ export function DMPanel() {
               <span style={{ color: 'var(--cyan)' }}>{otherUser.name}</span>
               <div style={{ marginTop: 8 }}>// no messages yet, start the conversation</div>
             </div>
-          ) : messages.map((msg, idx) => {
-            const isMine = msg.senderId === currentUser.id;
+          ) : messages.map((msg: any, idx: number) => {
+            const isMine = msg.authorId === currentUserId;
             const prevMsg = messages[idx - 1];
-            const showAvatar = !prevMsg || prevMsg.senderId !== msg.senderId;
+            const showAvatar = !prevMsg || prevMsg.authorId !== msg.authorId;
 
             return (
-              <div key={msg.id} className={`dm-message ${isMine ? 'mine' : 'theirs'} ${showAvatar ? '' : 'no-avatar'}`}>
+              <div key={msg._id} className={`dm-message ${isMine ? 'mine' : 'theirs'} ${showAvatar ? '' : 'no-avatar'}`}>
                 {!isMine && showAvatar && (
-                  <Avatar name={otherUser.name} size="sm" />
+                  <Avatar name={otherUser?.name || 'User'} size="sm" />
                 )}
                 {!isMine && !showAvatar && <div className="dm-avatar-space" />}
                 <div className="dm-message-content">
                   {showAvatar && !isMine && (
-                    <span className="dm-sender-name">{otherUser.name}</span>
+                    <span className="dm-sender-name">{otherUser?.name || 'User'}</span>
                   )}
                   <div className="dm-bubble">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
                   </div>
-                  <span className="dm-time">{formatTime(msg.createdAt)}</span>
+                  <span className="dm-time">{formatTime(new Date(msg.createdAt))}</span>
                 </div>
               </div>
             );

@@ -83,7 +83,7 @@ interface UIState {
   setShowCreateChannel: (show: boolean) => void;
   highlightMessage: (messageId: string | null) => void;
   clearHighlight: () => void;
-  login: (email: string) => boolean;
+  login: (email: string, userId: string) => void;
   logout: () => void;
   switchOrg: (orgId: string) => void;
   setCurrentUserStatus: (status: UserStatus) => void;
@@ -345,6 +345,7 @@ export const useUIStore = create<UIState>()(
         savedMessages: state.savedMessages,
         starredChannels: state.starredChannels,
         currentUserStatus: state.currentUserStatus,
+        currentUserId: state.currentUserId,
       }),
     }
   )

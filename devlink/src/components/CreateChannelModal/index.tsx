@@ -25,7 +25,7 @@ export function CreateChannelModal({ onClose }: CreateChannelModalProps) {
       type: channelType,
       description,
       orgId: currentOrgId,
-      createdBy: currentUser || 'guest',
+      createdBy: (currentUser || 'guest') as any,
     }, {
       onSuccess: () => {
         addToast({ type: 'success', message: `Channel #${channelName.trim()} created successfully` });

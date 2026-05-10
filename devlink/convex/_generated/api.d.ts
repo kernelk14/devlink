@@ -9,6 +9,8 @@
  */
 
 import type * as channels from "../channels.js";
+import type * as connections from "../connections.js";
+import type * as dms from "../dms.js";
 import type * as http from "../http.js";
 import type * as messages from "../messages.js";
 import type * as organizations from "../organizations.js";
@@ -23,6 +25,8 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   channels: typeof channels;
+  connections: typeof connections;
+  dms: typeof dms;
   http: typeof http;
   messages: typeof messages;
   organizations: typeof organizations;

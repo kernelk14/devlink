@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { useStore } from '@/lib/store';
-import { useChannels } from '@/lib/hooks';
-import { X, Hash, Lock, Users, Trash2, Edit, Plus, Check } from 'lucide-react';
+import { useState } from 'react';
+import { useChannels, useUsers, useJoinChannel, useUser } from '@/hooks/useData';
+import { X, Hash, Lock, Users, Trash2, Edit, Plus, Check, UserPlus } from 'lucide-react';
+import { useUIStore } from '@/lib/store';
 
 interface ChannelSettingsModalProps {
   channelId: string;
@@ -9,14 +9,30 @@ interface ChannelSettingsModalProps {
 }
 
 export function ChannelSettingsModal({ channelId, onClose }: ChannelSettingsModalProps) {
-  const { channels } = useChannels();
-  const channel = channels.find(c => c.id === channelId);
+  const { data: channels = [] } = useChannels();
+  const { data: allUsers = [] } = useUsers();
+  const joinChannelMutation = useJoinChannel();
+  const { addToast } = useUIStore();
+  
+  const channel = channels.find((c: any) => c._id === channelId);
   const [activeTab, setActiveTab] = useState('general');
   const [isEditing, setIsEditing] = useState(false);
   const [channelName, setChannelName] = useState(channel?.name || '');
   const [channelDescription, setChannelDescription] = useState(channel?.description || '');
+  const [showInviteList, setShowInviteList] = useState(false);
 
   if (!channel) return null;
+
+  const handleAddMember = async (userId: string) => {
+    try {
+      await joinChannelMutation.mutateAsync({ channelId, userId });
+      addToast({ type: 'success', message: 'User added to channel' });
+    } catch (err) {
+      addToast({ type: 'error', message: 'Failed to add user' });
+    }
+  };
+
+  const nonMembers = allUsers.filter(u => !channel.members.includes(u._id));
 
   return (
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -165,30 +181,69 @@ export function ChannelSettingsModal({ channelId, onClose }: ChannelSettingsModa
                     {channel.members?.length || 0} members in this channel
                   </p>
                 </div>
-                <button className="btn btn-secondary">
-                  <Plus size={14} />
-                  Add Member
+                <button 
+                  className={`btn ${showInviteList ? 'btn-ghost' : 'btn-secondary'}`} 
+                  onClick={() => setShowInviteList(!showInviteList)}
+                >
+                  {showInviteList ? 'done' : (
+                    <>
+                      <Plus size={14} />
+                      Add Member
+                    </>
+                  )}
                 </button>
               </div>
-              
-              <div className="members-list">
-                <div className="member-item">
-                  <div className="avatar avatar-sm" style={{ background: 'var(--purple)' }}>A</div>
-                  <div className="member-info">
-                    <div className="member-name">Alex Chen</div>
-                    <div className="member-role">Admin</div>
+
+              {showInviteList ? (
+                <div className="members-list">
+                  <div className="terminal-block" style={{ marginBottom: 12 }}>
+                    <div className="terminal-line">
+                      <span className="prompt-comment"># select users to invite</span>
+                    </div>
                   </div>
-                  <button className="btn btn-ghost btn-icon">...</button>
+                  {nonMembers.map((user: any) => (
+                    <div key={user._id} className="member-item">
+                      <div className="avatar avatar-sm" style={{ background: 'var(--blue)' }}>
+                        {user.name?.charAt(0) || user.email?.charAt(0) || 'U'}
+                      </div>
+                      <div className="member-info">
+                        <div className="member-name">{user.name || user.email}</div>
+                        <div className="member-role" style={{ color: 'var(--fg-dim)' }}>{user.email}</div>
+                      </div>
+                      <button 
+                        className="btn btn-ghost btn-icon" 
+                        onClick={() => handleAddMember(user._id)}
+                        disabled={joinChannelMutation.isPending}
+                      >
+                        <UserPlus size={14} />
+                      </button>
+                    </div>
+                  ))}
+                  {nonMembers.length === 0 && (
+                    <div style={{ padding: 12, textAlign: 'center', color: 'var(--fg-dim)', fontSize: 12 }}>
+                      everyone is already a member
+                    </div>
+                  )}
                 </div>
-                <div className="member-item">
-                  <div className="avatar avatar-sm" style={{ background: 'var(--blue)' }}>S</div>
-                  <div className="member-info">
-                    <div className="member-name">Sarah Kim</div>
-                    <div className="member-role">Member</div>
-                  </div>
-                  <button className="btn btn-ghost btn-icon">...</button>
+              ) : (
+                <div className="members-list">
+                  {channel.members.map((memberId: string) => {
+                    const member = allUsers.find(u => u._id === memberId);
+                    return (
+                      <div key={memberId} className="member-item">
+                        <div className="avatar avatar-sm" style={{ background: 'var(--purple)' }}>
+                          {member?.name?.charAt(0) || 'U'}
+                        </div>
+                        <div className="member-info">
+                          <div className="member-name">{member?.name || 'Unknown User'}</div>
+                          <div className="member-role">{memberId === channel.createdBy ? 'Admin' : 'Member'}</div>
+                        </div>
+                        <button className="btn btn-ghost btn-icon">...</button>
+                      </div>
+                    );
+                  })}
                 </div>
-              </div>
+              )}
             </div>
           )}
 

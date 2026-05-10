@@ -1,16 +1,28 @@
 import { useState } from 'react';
 import { useUIStore, getCurrentUser } from '@/lib/store';
-import { useChannels } from '@/lib/hooks';
+import { useMessages, useUsers } from '@/hooks/useData';
 import { X, MessageSquare } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 export function ThreadPanel() {
-  const { selectedThreadId, setSelectedThread } = useUIStore();
-  const { channels } = useChannels();
+  const { selectedChannelId, selectedThreadId, setSelectedThread } = useUIStore();
+  const { data: messages = [] } = useMessages(selectedChannelId);
+  const { data: users = [] } = useUsers();
   const [replyText, setReplyText] = useState('');
 
-  const activeChannel = channels.find(c => c.threads?.some(t => t.id === selectedThreadId));
-  const thread = activeChannel?.threads?.find(t => t.id === selectedThreadId);
+  const parentMessage = messages.find((m: any) => m._id === selectedThreadId);
+  const user = users.find((u: any) => u._id === parentMessage?.authorId) as any;
+  
+  const thread = parentMessage ? {
+    id: parentMessage._id,
+    user: {
+      name: user?.name || 'Unknown',
+      color: user?.color || 'var(--purple)'
+    },
+    timestamp: parentMessage.createdAt,
+    content: parentMessage.content,
+    replies: [] as any[]
+  } : null;
 
   if (!thread) return null;
 

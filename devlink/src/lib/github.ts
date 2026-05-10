@@ -28,7 +28,7 @@ export async function startGithubAuth(onUrl: (url: string) => void): Promise<str
     throw new Error(data.error_description || data.error);
   }
 
-  onUrl(`https://github.com/login/device/${data.device_code}`);
+  onUrl(data.user_code || '');
   return data.device_code;
 }
 

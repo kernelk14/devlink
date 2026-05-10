@@ -4,7 +4,10 @@ import { useChannels as useConvexChannels, useUsers as useConvexUsers, useMessag
 
 export function useChannels() {
   const currentOrgId = useUIStore((state) => state.currentOrgId);
-  const { data: channelsData, isLoading, isError } = useConvexChannels(currentOrgId);
+  const currentUserId = useUIStore((state) => state.currentUserId);
+  // Pass orgId only if it looks like a real Convex ID (not a mock like 'o1')
+  const queryOrgId = currentOrgId && !currentOrgId.match(/^o\d+$/) ? currentOrgId : undefined;
+  const { data: channelsData, isLoading, isError } = useConvexChannels(queryOrgId, currentUserId || undefined);
   
   // Ensure channels is always an array, never undefined
   const channels = useMemo(() => {
@@ -101,7 +104,7 @@ export function useAuth() {
     user,
     isAuthenticated,
     login: (username: string, password: string) => {
-      return login(username);
+      return login(username, 'hook-user');
     },
     logout,
   };

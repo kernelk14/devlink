@@ -55,17 +55,20 @@ export const sendMessage = mutation({
       createdAt: now,
     });
 
-    // Update channel's last activity
-    const channel = await ctx.db
-      .query("channels")
-      .withIndex("by_org", (q) => q.eq("orgId", args.channelId))
-      .first();
-    
-    if (channel) {
-      await ctx.db.patch(channel._id, {
+    // Update channel or DM last activity
+    const channelId = ctx.db.normalizeId("channels", args.channelId);
+    if (channelId) {
+      await ctx.db.patch(channelId, {
         lastActivity: now,
         updatedAt: now,
       });
+    } else {
+      const dmId = ctx.db.normalizeId("directMessages", args.channelId);
+      if (dmId) {
+        await ctx.db.patch(dmId, {
+          lastActivity: now,
+        });
+      }
     }
 
     return await ctx.db.get(messageId);

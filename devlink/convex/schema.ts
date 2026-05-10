@@ -31,6 +31,7 @@ export default defineSchema({
       v.literal("member"),
       v.literal("guest")
     )),
+    contacts: v.optional(v.array(v.string())),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -113,4 +114,15 @@ export default defineSchema({
   })
     .index("by_user", ["userId"])
     .index("by_org", ["orgId"]),
+
+  connectionRequests: defineTable({
+    senderId: v.id("users"),
+    receiverId: v.id("users"),
+    status: v.union(v.literal("pending"), v.literal("accepted"), v.literal("rejected")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_receiver", ["receiverId"])
+    .index("by_sender", ["senderId"])
+    .index("by_receiver_status", ["receiverId", "status"]),
 });

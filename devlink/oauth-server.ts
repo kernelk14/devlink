@@ -1,9 +1,31 @@
 import http from 'http';
 import https from 'https';
 import { URL } from 'url';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
+
+// Auto-load .env file (reads GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET)
+try {
+  const envPath = resolve(process.cwd(), '.env');
+  const envFile = readFileSync(envPath, 'utf-8');
+  for (const line of envFile.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eqIdx = trimmed.indexOf('=');
+    if (eqIdx < 0) continue;
+    const key = trimmed.slice(0, eqIdx).trim();
+    const val = trimmed.slice(eqIdx + 1).trim();
+    // Don't override values already set in the shell environment
+    if (!process.env[key]) process.env[key] = val;
+  }
+  console.log('[oauth-server] Loaded .env file');
+} catch {
+  console.log('[oauth-server] No .env file found, using shell environment');
+}
 
 const PORT = 3001;
-const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID || '';
+// Fallback to VITE_ prefixed key so we only need one entry in .env
+const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID || process.env.VITE_GITHUB_CLIENT_ID || '';
 const GITHUB_CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET || '';
 
 const server = http.createServer(async (req, res) => {

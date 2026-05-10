@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useUIStore } from '@/lib/store';
-import { useChannels } from '@/lib/hooks';
-import { Search, X, Hash, MessageSquare } from 'lucide-react';
+import { useChannels, useUsers } from '@/hooks/useData';
+import { Search, X, Hash, MessageSquare, User } from 'lucide-react';
 
 interface SearchModalProps {
   onClose: () => void;
@@ -10,8 +10,9 @@ interface SearchModalProps {
 export function SearchModal({ onClose }: SearchModalProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<any[]>([]);
-  const { messages, setSelectedChannel, setSelectedDMUser } = useUIStore();
-  const { channels } = useChannels();
+  const { setSelectedChannel, setSelectedDMUser } = useUIStore();
+  const { data: channels = [] } = useChannels();
+  const { data: users = [] } = useUsers();
   const addToast = useUIStore((state) => state.addToast);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -26,34 +27,38 @@ export function SearchModal({ onClose }: SearchModalProps) {
     }
 
     const q = query.toLowerCase();
-    const searchMessages = messages
-      .filter(m => m.content.toLowerCase().includes(q))
-      .slice(0, 5)
-      .map(m => ({
-        type: 'message',
-        id: m.id,
-        title: m.user?.name || 'Unknown',
-        preview: m.content.slice(0, 100),
-        channelId: m.channelId,
-      }));
+    const searchMessages: any[] = [];
 
     const searchChannels = channels
-      .filter(c => c.name.toLowerCase().includes(q))
+      .filter((c: any) => c.name.toLowerCase().includes(q))
       .slice(0, 3)
-      .map(c => ({
+      .map((c: any) => ({
         type: 'channel',
-        id: c.id,
+        id: c._id,
         title: `#${c.name}`,
         preview: c.description || 'No description',
       }));
 
-    setResults([...searchChannels, ...searchMessages]);
-  }, [query, messages, channels]);
+    const searchUsers = users
+      .filter(u => u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q))
+      .slice(0, 3)
+      .map(u => ({
+        type: 'user',
+        id: u._id,
+        title: `@${u.name || u.email}`,
+        preview: u.statusMessage || u.email || 'Online',
+      }));
+
+    setResults([...searchChannels, ...searchUsers, ...searchMessages]);
+  }, [query, channels, users]);
 
   const handleSelect = (result: any) => {
     if (result.type === 'channel') {
       setSelectedChannel(result.id);
       addToast({ type: 'info', message: `Switched to #${result.title.replace('#', '')}` });
+    } else if (result.type === 'user') {
+      setSelectedDMUser(result.id);
+      addToast({ type: 'info', message: `Opened DM with ${result.title}` });
     } else {
       setSelectedChannel(result.channelId);
       addToast({ type: 'info', message: `Jumped to message by ${result.title}` });
@@ -134,6 +139,23 @@ export function SearchModal({ onClose }: SearchModalProps) {
                   <div key={result.id} className="search-result" onClick={() => handleSelect(result)} style={{ cursor: 'pointer' }}>
                     <div className="search-result-icon">
                       <MessageSquare size={14} />
+                    </div>
+                    <div className="search-result-content">
+                       <div className="search-result-title">{result.title}</div>
+                      <div className="search-result-preview">{result.preview}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {results.filter(r => r.type === 'user').length > 0 && (
+              <div className="search-section">
+                <div className="search-section-title">// users</div>
+                {results.filter(r => r.type === 'user').map((result) => (
+                  <div key={result.id} className="search-result" onClick={() => handleSelect(result)} style={{ cursor: 'pointer' }}>
+                    <div className="search-result-icon">
+                      <User size={14} />
                     </div>
                     <div className="search-result-content">
                       <div className="search-result-title">{result.title}</div>

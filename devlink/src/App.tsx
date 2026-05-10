@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useUIStore, getCurrentUser } from '@/lib/store';
-import { useAuth } from '@/lib/auth';
-import { useChannels, usePreferences } from '@/lib/hooks';
+import { useChannels, useOrganizations } from '@/hooks/useData';
+import { usePreferences } from '@/lib/hooks';
 import { SearchModal } from '@/components/SearchModal';
 import { LoginModal } from '@/components/LoginModal';
 import { UserProfileModal } from '@/components/UserProfileModal';
@@ -69,18 +69,10 @@ function useSidebarResizer() {
 }
 
 export function App() {
-  const { isAuthenticated } = useAuth();
-  const currentUser = getCurrentUser();
-  const {
-    selectedChannelId,
-    selectedThreadId,
-    selectedDMUserId,
-    sidebarCollapsed,
-    toggleSidebar,
-    toggleShortcutsModal,
-  } = useUIStore();
-  const { channels } = useChannels();
+  const { isAuthenticated, selectedChannelId, selectedThreadId, selectedDMUserId, sidebarCollapsed, toggleSidebar, toggleShortcutsModal, switchOrg, currentOrgId, setSelectedChannel, currentUserId } = useUIStore();
+  const { data: channels = [] } = useChannels(currentOrgId || undefined, currentUserId || undefined);
   const { preferences } = usePreferences();
+  const currentUser = getCurrentUser();
 
   const [showSearch, setShowSearch] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -89,6 +81,23 @@ export function App() {
   const [showLogin, setShowLogin] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const { data: orgs } = useOrganizations();
+
+  // Sync the real Convex org ID into the store and auto-select first channel
+  useEffect(() => {
+    if (orgs && orgs.length > 0) {
+      const realOrgId = (orgs[0] as any)._id;
+      if (realOrgId && realOrgId !== currentOrgId) {
+        switchOrg(realOrgId);
+      }
+    }
+  }, [orgs]);
+
+  useEffect(() => {
+    if (channels.length > 0 && !selectedChannelId) {
+      setSelectedChannel(channels[0]._id);
+    }
+  }, [channels, selectedChannelId, setSelectedChannel]);
 
   useSidebarResizer();
 
@@ -97,7 +106,7 @@ export function App() {
     return () => clearInterval(timer);
   }, []);
 
-  const channel = channels.find((c) => c.id === selectedChannelId);
+  const channel = channels.find((c: any) => c._id === selectedChannelId);
   // TODO: Implement threads query from Convex
   const thread = undefined;
 

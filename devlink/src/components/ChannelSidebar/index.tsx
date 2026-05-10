@@ -1,28 +1,37 @@
 import { useState } from 'react';
 import { useUIStore, getCurrentUser } from '@/lib/store';
-import { useChannels, useUsers } from '@/lib/hooks';
-import { ChevronDown, Plus, Settings, Users, Hash, Lock, Star } from 'lucide-react';
+import { useChannels, useUsers, useUser, usePendingRequests } from '@/hooks/useData';
+import { ChevronDown, Plus, Settings, Users, Hash, Lock, Star, Search, Bell } from 'lucide-react';
 import { CreateChannelModal } from '@/components/CreateChannelModal';
+import { PeopleModal } from '@/components/PeopleModal';
+import { NotificationsModal } from '@/components/NotificationsModal';
 
 export function ChannelSidebar() {
-  const { selectedChannelId, setSelectedChannel, starredChannels, toggleStarredChannel, setSelectedDMUser, currentOrgId } = useUIStore();
-  const currentUser = getCurrentUser();
-  const { channels, isLoading, isError } = useChannels();
-  const { users } = useUsers();
+  const { selectedChannelId, setSelectedChannel, starredChannels, toggleStarredChannel, setSelectedDMUser, currentOrgId, currentUserId } = useUIStore();
+  const { data: channels = [], isLoading, isError } = useChannels(currentOrgId || undefined, currentUserId || undefined);
+  const { data: allUsers = [] } = useUsers();
+  const { data: currentUserData } = useUser(currentUserId || undefined);
+  const { data: pendingRequests = [] } = usePendingRequests(currentUserId || undefined);
   const [showCreateChannel, setShowCreateChannel] = useState(false);
+  const [showPeopleModal, setShowPeopleModal] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
   
-  // Debug logging
-  console.log('[ChannelSidebar] orgId:', currentOrgId, 'channels:', channels, 'loading:', isLoading, 'error:', isError);
+  const currentUser = currentUserData || getCurrentUser();
 
   const sortedChannels = [...channels].sort((a, b) => {
-    const aStarred = starredChannels.includes(a.id);
-    const bStarred = starredChannels.includes(b.id);
+    const idA = (a as any)._id;
+    const idB = (b as any)._id;
+    const aStarred = starredChannels.includes(idA);
+    const bStarred = starredChannels.includes(idB);
     if (aStarred && !bStarred) return -1;
     if (!aStarred && bStarred) return 1;
     return a.name.localeCompare(b.name);
   });
 
-  const dmUsers = users.filter(u => u.id !== currentUser.id);
+  const dmUsers = allUsers.filter(u => 
+    u._id !== currentUserId && 
+    (currentUserData as any)?.contacts?.includes(u._id)
+  );
 
   return (
     <div className="sidebar">
@@ -58,17 +67,17 @@ export function ChannelSidebar() {
           </button>
         </div>
         <div className="channel-list">
-          {sortedChannels.map((channel) => {
-            const isActive = selectedChannelId === channel.id;
-            const isStarred = starredChannels.includes(channel.id);
+          {sortedChannels.map((channel: any) => {
+            const isActive = selectedChannelId === channel._id;
+            const isStarred = starredChannels.includes(channel._id);
             return (
               <div
-                key={channel.id}
+                key={channel._id}
                 className={`channel-item ${isActive ? 'active' : ''}`}
-                onClick={() => setSelectedChannel(channel.id)}
+                onClick={() => setSelectedChannel(channel._id)}
                 role="button"
                 tabIndex={0}
-                onKeyDown={(e) => e.key === 'Enter' && setSelectedChannel(channel.id)}
+                onKeyDown={(e) => e.key === 'Enter' && setSelectedChannel(channel._id)}
               >
                 <span className="ch-icon">{channel.type === 'private' ? '🔒' : '#'}</span>
                 <span className="ch-name">{channel.name}</span>
@@ -77,7 +86,7 @@ export function ChannelSidebar() {
                 )}
                 <button
                   className={`ch-star ${isStarred ? 'starred' : ''}`}
-                  onClick={(e) => { e.stopPropagation(); toggleStarredChannel(channel.id); }}
+                  onClick={(e) => { e.stopPropagation(); toggleStarredChannel(channel._id); }}
                 >
                   {isStarred ? '★' : '☆'}
                 </button>
@@ -91,21 +100,21 @@ export function ChannelSidebar() {
       <div className="sidebar-section">
         <div className="sidebar-section-header">
           <span className="section-label">// direct messages</span>
-          <button className="section-btn" title="New DM">
+          <button className="section-btn" onClick={() => setShowPeopleModal(true)} title="New DM">
             <Plus size={10} />
           </button>
         </div>
         <div className="channel-list">
-          {dmUsers.map((user) => {
+          {dmUsers.map((user: any) => {
             const statusColor = user.status === 'online' ? 'var(--green)' : user.status === 'away' ? 'var(--yellow)' : 'var(--fg-dim)';
             return (
               <div
-                key={user.id}
+                key={user._id}
                 className="channel-item"
-                onClick={() => setSelectedDMUser(user.id)}
+                onClick={() => setSelectedDMUser(user._id)}
                 role="button"
                 tabIndex={0}
-                onKeyDown={(e) => e.key === 'Enter' && setSelectedDMUser(user.id)}
+                onKeyDown={(e) => e.key === 'Enter' && setSelectedDMUser(user._id)}
               >
                 <span className="ch-icon">
                   <span style={{ position: 'relative', display: 'inline-flex' }}>
@@ -121,7 +130,7 @@ export function ChannelSidebar() {
                       fontWeight: 700,
                       color: '#fff',
                     }}>
-                      {user.name.split(' ').map(n => n[0]).join('')}
+                      {user.name.split(' ').map((n: string) => n[0]).join('')}
                     </span>
                     <span style={{
                       position: 'absolute',
@@ -155,6 +164,26 @@ export function ChannelSidebar() {
             <span style={{ color: 'var(--fg-dim)', fontSize: 10 }}>online</span>
           </div>
         </div>
+        <button 
+          className="sidebar-settings-btn" 
+          onClick={() => setShowNotifications(true)} 
+          title="Notifications"
+          style={{ position: 'relative', marginRight: 4 }}
+        >
+          <Bell size={12} />
+          {pendingRequests.length > 0 && (
+            <span style={{
+              position: 'absolute',
+              top: -2,
+              right: -2,
+              width: 8,
+              height: 8,
+              background: 'var(--red)',
+              borderRadius: '50%',
+              border: '1px solid var(--bg-panel)'
+            }} />
+          )}
+        </button>
         <button className="sidebar-settings-btn" onClick={() => {}} title="Settings">
           <Settings size={12} />
         </button>
@@ -162,6 +191,12 @@ export function ChannelSidebar() {
 
       {showCreateChannel && (
         <CreateChannelModal onClose={() => setShowCreateChannel(false)} />
+      )}
+      {showPeopleModal && (
+        <PeopleModal onClose={() => setShowPeopleModal(false)} />
+      )}
+      {showNotifications && (
+        <NotificationsModal onClose={() => setShowNotifications(false)} />
       )}
     </div>
   );

@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import { useUIStore, getCurrentUser } from '@/lib/store';
-import { X, MessageSquare, Hash, Mail, Calendar, ExternalLink } from 'lucide-react';
+import { useUIStore } from '@/lib/store';
+import { X, MessageSquare, Hash, UserPlus, UserCheck } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
+import { useUser, useConnectUser } from '@/hooks/useData';
 
 interface UserProfileModalProps {
   userId: string;
@@ -9,13 +9,42 @@ interface UserProfileModalProps {
 }
 
 export function UserProfileModal({ userId, onClose }: UserProfileModalProps) {
-  const { users, setSelectedDMUser, addToast } = useUIStore();
-  const user = users.find(u => u.id === userId) || {
+  const { setSelectedDMUser, addToast, currentUserId } = useUIStore();
+  const { data: convexUser } = useUser(userId);
+  const { data: currentUserData } = useUser(currentUserId || undefined);
+  const connectUserMutation = useConnectUser();
+
+  const isContact = currentUserData?.contacts?.includes(userId);
+  const isMe = currentUserId === userId;
+
+  const handleConnect = async () => {
+    if (!currentUserId || isMe) return;
+    try {
+      const res: any = await connectUserMutation.mutateAsync({ senderId: currentUserId, receiverId: userId });
+      if (res.success) {
+        addToast({ type: 'success', message: `Request sent to ${user.name}` });
+      } else {
+        addToast({ type: 'info', message: res.message });
+      }
+    } catch (err) {
+      addToast({ type: 'error', message: 'Failed to send request' });
+    }
+  };
+  
+  const user = convexUser ? {
+    id: convexUser._id,
+    name: (convexUser as any).name || (convexUser as any).email?.split('@')[0] || 'User',
+    username: (convexUser as any).email?.split('@')[0] || 'user',
+    email: (convexUser as any).email || 'user@example.com',
+    status: convexUser.status || 'offline',
+    statusMessage: convexUser.statusMessage,
+  } : {
     id: userId,
     name: 'User',
     username: 'user',
     email: 'user@example.com',
     status: 'offline' as const,
+    statusMessage: undefined,
   };
 
   const handleMessage = () => {
@@ -91,6 +120,17 @@ export function UserProfileModal({ userId, onClose }: UserProfileModalProps) {
                 <MessageSquare size={14} />
                 message
               </button>
+              {!isMe && (
+                <button 
+                  className={`btn ${isContact ? 'btn-ghost' : 'btn-secondary'}`} 
+                  style={{ flex: 1 }} 
+                  onClick={handleConnect}
+                  disabled={isContact || connectUserMutation.isPending}
+                >
+                  {isContact ? <UserCheck size={14} /> : <UserPlus size={14} />}
+                  {isContact ? 'connected' : 'connect'}
+                </button>
+              )}
               <button className="btn btn-secondary" style={{ flex: 1 }} onClick={handleMention}>
                 <Hash size={14} />
                 mention

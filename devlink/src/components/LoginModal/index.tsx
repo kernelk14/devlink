@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { useUIStore } from '@/lib/store';
+import { useUsers, useCreateUser, useOrganizations } from '@/hooks/useData';
 import { X, LogIn, Terminal, UserPlus, Check, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { startGithubAuth, pollGithubToken, getGithubUser, getGithubEmails, buildGithubUsername } from '@/lib/github';
 
@@ -20,6 +21,9 @@ const MOCK_ACCOUNTS = [
 export function LoginModal({ onClose }: LoginModalProps) {
   const login = useUIStore((state) => state.login);
   const addToast = useUIStore((state) => state.addToast);
+  const { data: users = [] } = useUsers();
+  const { data: orgs = [] } = useOrganizations();
+  const createUserMutation = useCreateUser();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
@@ -38,10 +42,9 @@ export function LoginModal({ onClose }: LoginModalProps) {
   const handleGithubLogin = async () => {
     try {
       setGhAuthStep('code');
-      const deviceCode = await startGithubAuth((url) => {
-        setGhDeviceCode(url);
-        const match = url.match(/\/([A-Z0-9]{4,})/);
-        if (match) setGhUserCode(match[1]);
+      const deviceCode = await startGithubAuth((userCode) => {
+        setGhDeviceCode('https://github.com/login/device');
+        setGhUserCode(userCode);
       });
       
       setGhAuthStep('polling');
@@ -58,9 +61,20 @@ export function LoginModal({ onClose }: LoginModalProps) {
             const user = await getGithubUser(result);
             const emails = await getGithubEmails(result);
             const primaryEmail = emails.find(e => e.primary && e.verified)?.email || emails[0]?.email || '';
-            
             const ghUsername = buildGithubUsername(user.name, user.login);
-            login(primaryEmail || `${ghUsername}@github.local`);
+            const loginEmail = primaryEmail || `${ghUsername}@github.local`;
+            
+            const firstOrgId = orgs[0]?._id;
+            
+            const finalUserId = await createUserMutation.mutateAsync({
+              name: user.name || user.login,
+              username: ghUsername,
+              email: loginEmail,
+              avatar: user.avatar_url,
+              orgId: firstOrgId,
+            });
+            
+            login(loginEmail, finalUserId);
             addToast({ type: 'success', message: `Welcome, ${user.name || user.login}!` });
             setGhAuthStep('complete');
             setTimeout(() => {
@@ -112,9 +126,14 @@ export function LoginModal({ onClose }: LoginModalProps) {
     );
 
     if (account) {
-      login(account.email);
-      addToast({ type: 'success', message: `Welcome back, ${account.name}!` });
-      onClose();
+      const realUser = users.find(u => u.email.toLowerCase() === account.email.toLowerCase()) as any;
+      if (realUser?._id) {
+        login(account.email, realUser._id);
+        addToast({ type: 'success', message: `Welcome back, ${account.name}!` });
+        onClose();
+      } else {
+        setError('User not found in database. Please wait for sync or register.');
+      }
     } else {
       setError('Invalid credentials. Use a demo account or create a new one.');
     }
@@ -142,30 +161,45 @@ export function LoginModal({ onClose }: LoginModalProps) {
 
     setIsLoading(true);
     setError('');
-    await new Promise((r) => setTimeout(r, 1000));
+    
+    try {
+      const exists = MOCK_ACCOUNTS.find((a) => a.email.toLowerCase() === email.toLowerCase());
+      if (exists) {
+        setError('An account with this email already exists');
+        setIsLoading(false);
+        return;
+      }
 
-    const exists = MOCK_ACCOUNTS.find((a) => a.email.toLowerCase() === email.toLowerCase());
-    if (exists) {
-      setError('An account with this email already exists');
-      setIsLoading(false);
-      return;
+      MOCK_ACCOUNTS.push({ email: email.toLowerCase(), name: username.trim(), password });
+      const firstOrgId = orgs[0]?._id;
+      const finalUserId = await createUserMutation.mutateAsync({
+        name: username.trim(),
+        username: username.trim().toLowerCase().replace(/\s+/g, ''),
+        email: email.toLowerCase(),
+        orgId: firstOrgId,
+      });
+      login(email.toLowerCase(), finalUserId);
+      setRegistered(username.trim());
+      addToast({ type: 'success', message: `Welcome, ${username.trim()}! Account created.` });
+      setTimeout(() => onClose(), 1200);
+    } catch (err: any) {
+      setError(err.message || 'Registration failed');
     }
-
-    MOCK_ACCOUNTS.push({ email: email.toLowerCase(), name: username.trim(), password });
-    login(email.toLowerCase());
-    setRegistered(username.trim());
-    addToast({ type: 'success', message: `Welcome, ${username.trim()}! Account created.` });
-    setTimeout(() => onClose(), 1200);
     setIsLoading(false);
   };
 
   const handleDemoLogin = async (email: string) => {
     setIsLoading(true);
-    await new Promise((r) => setTimeout(r, 600));
-    login(email);
-    const account = MOCK_ACCOUNTS.find((a) => a.email === email);
-    addToast({ type: 'success', message: `Signed in as ${account?.name || email}` });
-    onClose();
+    const realUser = users.find(u => u.email.toLowerCase() === email.toLowerCase()) as any;
+    if (realUser?._id) {
+      login(email, realUser._id);
+      const account = MOCK_ACCOUNTS.find((a) => a.email === email);
+      addToast({ type: 'success', message: `Signed in as ${account?.name || email}` });
+      onClose();
+    } else {
+      addToast({ type: 'error', message: 'Demo user not synchronized. Please try again in a moment.' });
+    }
+    setIsLoading(false);
   };
 
   const inputStyle = { background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--fg)', padding: '8px 10px', fontFamily: 'inherit', fontSize: 13, width: '100%', outline: 'none', transition: 'border-color 150ms' };
