@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useUIStore } from '@/lib/store';
-import { useSendMessage } from '@/hooks/useData';
+import { useSendMessage, useUser } from '@/hooks/useData';
 import { Paperclip, Bold, Italic, Code, Link2, Smile, Zap, RefreshCw } from 'lucide-react';
 
 export function MessageComposer() {
@@ -17,6 +17,10 @@ export function MessageComposer() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const quickEmojis = ['😀', '😂', '😍', '👍', '🎉', '🚀', '💡', '❤️', '🔥', '😎', '🤔', '👏'];
+
+  // Get current user data to display the real username
+  const { data: currentUserData } = useUser(currentUserId || undefined);
+  const userName = currentUserData?.name?.split(' ')[0] || currentUserId?.substring(0, 8) || 'guest';
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -121,7 +125,7 @@ export function MessageComposer() {
   return (
     <div className="composer">
       <div className="composer-prompt-line">
-        <span className="prompt-user">{currentUserId?.substring(0, 8) || 'guest'}</span>
+        <span className="prompt-user">{userName}</span>
         <span className="prompt-at">@</span>
         <span className="prompt-host">devlink</span>
         <span className="prompt-symbol">$</span>
