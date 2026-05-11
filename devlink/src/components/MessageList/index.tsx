@@ -51,11 +51,9 @@ export function MessageList() {
         {needsDivider && renderDateDivider(new Date(message.createdAt))}
         <div className="msg-line">
           <div className="msg-avatar-col">
-            {!sameAuthor && (
-              <Avatar name={user?.name || '?'} size="sm" />
-            )}
+            <Avatar name={user?.name || '?'} size="sm" />
           </div>
-          <span className={`msg-prompt ${sameAuthor ? 'msg-prompt-continue' : ''}`}>
+          <span className="msg-prompt">
             <span className="msg-username">{userName}</span>
             <span className="msg-at">@</span>
             <span className="msg-host">devlink</span>

@@ -13,7 +13,10 @@ import { MessageComposer } from '@/components/MessageComposer';
 import { ChannelSidebar } from '@/components/ChannelSidebar';
 import { ThreadPanel } from '@/components/ThreadPanel';
 import { DMPanel } from '@/components/DMPanel';
+import { TabsBar } from '@/components/TabsBar';
+import { QuickStartGuide } from '@/components/QuickStartGuide';
 import { ToastContainer } from '@/components/ToastContainer';
+import { MessageNotificationWatcher } from '@/components/MessageNotificationWatcher';
 import { Avatar } from '@/components/ui/Avatar';
 import { format } from 'date-fns';
 
@@ -69,7 +72,7 @@ function useSidebarResizer() {
 }
 
 export function App() {
-  const { isAuthenticated, selectedChannelId, selectedThreadId, selectedDMUserId, sidebarCollapsed, toggleSidebar, toggleShortcutsModal, switchOrg, currentOrgId, setSelectedChannel, currentUserId } = useUIStore();
+  const { isAuthenticated, selectedChannelId, selectedThreadId, selectedDMUserId, sidebarCollapsed, toggleSidebar, toggleShortcutsModal, switchOrg, currentOrgId, setSelectedChannel, currentUserId, openTab, activeTabId, openTabs, showQuickStartGuide, setShowQuickStartGuide, dmConversationMap } = useUIStore();
   const { data: channels = [] } = useChannels(currentOrgId || undefined, currentUserId || undefined);
   const { preferences } = usePreferences();
   const currentUser = getCurrentUser();
@@ -94,10 +97,12 @@ export function App() {
   }, [orgs]);
 
   useEffect(() => {
-    if (channels.length > 0 && !selectedChannelId) {
-      setSelectedChannel(channels[0]._id);
+    if (channels.length > 0 && !selectedChannelId && !selectedDMUserId && activeTabId === null) {
+      const firstChannel = channels[0];
+      setSelectedChannel(firstChannel._id);
+      openTab({ id: firstChannel._id, type: 'channel', name: firstChannel.name });
     }
-  }, [channels, selectedChannelId, setSelectedChannel]);
+  }, [channels, selectedChannelId, selectedDMUserId, activeTabId, setSelectedChannel, openTab]);
 
   useSidebarResizer();
 
@@ -107,6 +112,8 @@ export function App() {
   }, []);
 
   const channel = channels.find((c: any) => c._id === selectedChannelId);
+  const activeTab = openTabs.find(t => t.id === activeTabId);
+  const activeChannelName = activeTab?.type === 'channel' ? activeTab.name : (activeTab?.type === 'dm' ? `dm/${activeTab.name}` : channel?.name || 'general');
   // TODO: Implement threads query from Convex
   const thread = undefined;
 
@@ -178,30 +185,27 @@ export function App() {
 
   return (
     <div className="app">
+{/* ── Sidebar Toggle ─── */}
+
       {preferences.sidebarVisible !== false && (
-        <>
-          <div className="sidebar-reveal-zone" />
-          <div className={`sidebar-host ${sidebarCollapsed ? 'is-collapsed' : ''}`}>
-            <ChannelSidebar />
-            <div className="sidebar-resizer"><div className="bar" /></div>
-          </div>
-          
-        </>
+        <div className={`sidebar-host ${sidebarCollapsed ? 'is-collapsed' : ''}`}>
+          <ChannelSidebar />
+        </div>
       )}
 
       <div className="main-area">
+        <div
+          className="sidebar-toggle"
+          onClick={() => toggleSidebar()}
+          title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points={sidebarCollapsed ? '9 18 15 12 9 6' : '15 18 9 12 15 6'} />
+          </svg>
+        </div>
+
         {/* ── Terminal Title Bar ─── */}
         <div className="terminal-titlebar">
-          <button
-            className={`titlebar-btn titlebar-collapse ${sidebarCollapsed ? 'collapsed' : ''}`}
-            onClick={() => toggleSidebar()}
-            title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect x="3" y="3" width="18" height="18" rx="2"/>
-              <line x1="9" y1="3" x2="9" y2="21"/>
-            </svg>
-          </button>
           <div className="titlebar-dots">
             <span className="dot dot-red" />
             <span className="dot dot-yellow" />
@@ -213,9 +217,10 @@ export function App() {
             <span style={{ color: 'var(--fg-dim)' }}>@</span>
             <span className="prompt-host" style={{ fontSize: 12 }}>devlink</span>
             <span style={{ color: 'var(--fg-dim)' }}>:</span>
-            <span className="prompt-path" style={{ fontSize: 12 }}>~/{channel?.name || 'general'}</span>
+            <span className="prompt-path" style={{ fontSize: 12 }}>~/{activeChannelName}</span>
             <span className="prompt-symbol" style={{ fontSize: 12 }}>$</span>
           </div>
+          <TabsBar />
           <div className="titlebar-actions">
             <button className="titlebar-btn" onClick={() => setShowNotificationSettings(true)} title="Notifications">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -239,12 +244,15 @@ export function App() {
 
         {/* ── Terminal Body ─── */}
         <div className="terminal-body">
-          <div className="messages-area">
-            <MessageList />
-            <MessageComposer />
-          </div>
+          {activeTab?.type === 'dm' ? (
+            <DMPanel />
+          ) : (
+            <div className="messages-area">
+              <MessageList />
+              <MessageComposer />
+            </div>
+          )}
           {preferences.showThreads && thread && <ThreadPanel />}
-          {selectedDMUserId && <DMPanel />}
         </div>
 
         {/* ── Terminal Status Bar ─── */}
@@ -255,7 +263,7 @@ export function App() {
             <span className="status-sep">|</span>
             <span className="status-text">DevLink v1.0.0</span>
             <span className="status-sep">|</span>
-            <span className="status-text status-dim">channels/{channel?.name || 'general'}</span>
+            <span className="status-text status-dim">channels/{activeChannelName}</span>
           </div>
           <div className="statusbar-right">
             <span className="status-key">Ctrl+K</span>
@@ -274,7 +282,22 @@ export function App() {
       {showNotificationSettings && <NotificationSettingsModal onClose={() => setShowNotificationSettings(false)} />}
       {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} />}
       {showUserProfile && <UserProfileModal userId={showUserProfile} onClose={() => setShowUserProfile(null)} />}
+      {showQuickStartGuide && <QuickStartGuide onClose={() => setShowQuickStartGuide(false)} />}
       <ToastContainer />
+      {openTabs.map(tab => {
+        const convId = tab.type === 'dm' ? dmConversationMap[tab.id] : tab.id;
+        if (!convId) return null;
+        return (
+          <MessageNotificationWatcher
+            key={tab.id}
+            tabId={tab.id}
+            channelId={convId}
+            isActive={tab.id === activeTabId}
+            name={tab.name}
+            type={tab.type}
+          />
+        );
+      })}
     </div>
   );
 }

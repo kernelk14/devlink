@@ -102,7 +102,8 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_participants", ["participantIds"])
-    .index("by_org", ["orgId"]),
+    .index("by_org", ["orgId"])
+    .index("by_lastActivity", ["lastActivity"]),
 
   userPresence: defineTable({
     userId: v.string(),

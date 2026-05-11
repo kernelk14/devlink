@@ -7,7 +7,7 @@ import { PeopleModal } from '@/components/PeopleModal';
 import { NotificationsModal } from '@/components/NotificationsModal';
 
 export function ChannelSidebar() {
-  const { selectedChannelId, setSelectedChannel, starredChannels, toggleStarredChannel, setSelectedDMUser, currentOrgId, currentUserId } = useUIStore();
+  const { selectedChannelId, setSelectedChannel, starredChannels, toggleStarredChannel, setSelectedDMUser, currentOrgId, currentUserId, openTab } = useUIStore();
   const { data: channels = [], isLoading, isError } = useChannels(currentOrgId || undefined, currentUserId || undefined);
   const { data: allUsers = [] } = useUsers();
   const { data: currentUserData } = useUser(currentUserId || undefined);
@@ -29,8 +29,7 @@ export function ChannelSidebar() {
   });
 
   const dmUsers = allUsers.filter(u =>
-    u.id !== currentUserId &&
-    (currentUserData as any)?.contacts?.includes(u.id)
+    u.id !== currentUserId
   );
 
   return (
@@ -74,10 +73,18 @@ export function ChannelSidebar() {
               <div
                 key={channel._id}
                 className={`channel-item ${isActive ? 'active' : ''}`}
-                onClick={() => setSelectedChannel(channel._id)}
+                onClick={() => {
+                  setSelectedChannel(channel._id);
+                  openTab({ id: channel._id, type: 'channel', name: channel.name });
+                }}
                 role="button"
                 tabIndex={0}
-                onKeyDown={(e) => e.key === 'Enter' && setSelectedChannel(channel._id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    setSelectedChannel(channel._id);
+                    openTab({ id: channel._id, type: 'channel', name: channel.name });
+                  }
+                }}
               >
                 <span className="ch-icon">{channel.type === 'private' ? '🔒' : '#'}</span>
                 <span className="ch-name">{channel.name}</span>
@@ -111,10 +118,18 @@ export function ChannelSidebar() {
               <div
                 key={user._id}
                 className="channel-item"
-                onClick={() => setSelectedDMUser(user._id)}
+                onClick={() => {
+                  setSelectedDMUser(user._id);
+                  openTab({ id: user._id, type: 'dm', name: user.name });
+                }}
                 role="button"
                 tabIndex={0}
-                onKeyDown={(e) => e.key === 'Enter' && setSelectedDMUser(user._id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    setSelectedDMUser(user._id);
+                    openTab({ id: user._id, type: 'dm', name: user.name });
+                  }
+                }}
               >
                 <span className="ch-icon">
                   <span style={{ position: 'relative', display: 'inline-flex' }}>

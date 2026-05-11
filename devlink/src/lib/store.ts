@@ -42,7 +42,16 @@ export interface FailedMessage {
   timestamp: number;
 }
 
+interface OpenTab {
+  id: string;
+  type: 'channel' | 'dm';
+  name: string;
+}
+
 interface UIState {
+  showQuickStartGuide: boolean;
+  openTabs: OpenTab[];
+  activeTabId: string | null;
   selectedChannelId: string;
   selectedThreadId: string | null;
   selectedDMUserId: string | null;
@@ -74,6 +83,8 @@ interface UIState {
   sidebarCollapsed: boolean;
   failedMessages: FailedMessage[];
   isOnline: boolean;
+  tabNotifications: Record<string, boolean>;
+  dmConversationMap: Record<string, string>;
   setSelectedChannel: (channelId: string) => void;
   setSelectedDMUser: (userId: string | null) => void;
   setSelectedThread: (threadId: string | null) => void;
@@ -112,12 +123,22 @@ interface UIState {
   clearFailedMessages: () => void;
   retryFailedMessage: (messageId: string) => void;
   setOnlineStatus: (online: boolean) => void;
+  setShowQuickStartGuide: (show: boolean) => void;
+  openTab: (tab: OpenTab) => void;
+  closeTab: (tabId: string) => void;
+  setActiveTab: (tabId: string) => void;
+  setTabNotification: (tabId: string) => void;
+  clearTabNotification: (tabId: string) => void;
+  setDMConversation: (userId: string, conversationId: string) => void;
 }
 
 
 export const useUIStore = create<UIState>()(
   persist(
     immer((set, get) => ({
+      showQuickStartGuide: true,
+      openTabs: [],
+      activeTabId: null,
       selectedChannelId: '',
       selectedThreadId: null,
       selectedDMUserId: null,
@@ -149,6 +170,8 @@ export const useUIStore = create<UIState>()(
       sidebarCollapsed: false,
       failedMessages: [],
       isOnline: true,
+      tabNotifications: {},
+      dmConversationMap: {},
 
       setSelectedChannel: (channelId) => set((state) => {
         state.selectedChannelId = channelId;
@@ -359,6 +382,51 @@ export const useUIStore = create<UIState>()(
           state.currentUserStatus = 'offline' as UserStatus;
         }
       }),
+
+      setShowQuickStartGuide: (show) => set((state) => {
+        state.showQuickStartGuide = show;
+      }),
+
+      openTab: (tab) => set((state) => {
+        const exists = state.openTabs.find(t => t.id === tab.id);
+        if (!exists) {
+          state.openTabs.push(tab);
+        }
+        state.activeTabId = tab.id;
+      }),
+
+      closeTab: (tabId) => set((state) => {
+        const tab = state.openTabs.find(t => t.id === tabId);
+        state.openTabs = state.openTabs.filter(t => t.id !== tabId);
+        delete state.tabNotifications[tabId];
+        if (state.activeTabId === tabId) {
+          const remaining = state.openTabs;
+          state.activeTabId = remaining.length > 0 ? remaining[remaining.length - 1].id : null;
+        }
+        if (tab?.type === 'dm' && state.selectedDMUserId === tabId) {
+          state.selectedDMUserId = null;
+        }
+        if (tab?.type === 'channel' && state.selectedChannelId === tabId) {
+          state.selectedChannelId = '';
+        }
+      }),
+
+      setActiveTab: (tabId) => set((state) => {
+        state.activeTabId = tabId;
+        delete state.tabNotifications[tabId];
+      }),
+
+      setTabNotification: (tabId) => set((state) => {
+        state.tabNotifications[tabId] = true;
+      }),
+
+      clearTabNotification: (tabId) => set((state) => {
+        delete state.tabNotifications[tabId];
+      }),
+
+      setDMConversation: (userId, conversationId) => set((state) => {
+        state.dmConversationMap[userId] = conversationId;
+      }),
     })),
     {
       name: 'devlink-storage',
@@ -368,6 +436,9 @@ export const useUIStore = create<UIState>()(
         currentOrgId: state.currentOrgId,
         selectedChannelId: state.selectedChannelId,
         selectedDMUserId: state.selectedDMUserId,
+        openTabs: state.openTabs,
+        activeTabId: state.activeTabId,
+        showQuickStartGuide: state.showQuickStartGuide,
         unreadChannels: state.unreadChannels,
         messageDrafts: state.messageDrafts,
         savedMessages: state.savedMessages,
@@ -376,6 +447,8 @@ export const useUIStore = create<UIState>()(
         currentUserId: state.currentUserId,
         failedMessages: state.failedMessages,
         isOnline: state.isOnline,
+        tabNotifications: state.tabNotifications,
+        dmConversationMap: state.dmConversationMap,
       }),
     }
   )

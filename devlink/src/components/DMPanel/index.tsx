@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { useUIStore } from '@/lib/store';
-import { useUser, useOrCreateDM, useMessages, useSendMessage } from '@/hooks/useData';
+import { useUIStore, getCurrentUser } from '@/lib/store';
+import { useUser, useOrCreateDM, useMessages, useSendMessage, useUsers } from '@/hooks/useData';
 import { Avatar } from '../ui/Avatar';
-import { ArrowLeft, Send, Smile, MoreHorizontal } from 'lucide-react';
+import { ArrowLeft, Send, Smile, Bold, Italic, Code, Link2, MoreHorizontal } from 'lucide-react';
 import { format, isToday, isYesterday } from 'date-fns';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -17,8 +17,10 @@ export function DMPanel() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const prevDMUserId = useRef<string | null>(null);
 
-  const { selectedDMUserId, setSelectedDMUser, currentUserId, currentOrgId, addToast } = useUIStore();
+  const { selectedDMUserId, setSelectedDMUser, currentUserId, currentOrgId, addToast, openTab, setMessageDraft, clearMessageDraft, messageDrafts, setDMConversation } = useUIStore();
+  const currentUser = getCurrentUser();
   const { data: otherUser, isLoading: userLoading } = useUser(selectedDMUserId || undefined);
+  const { data: allUsers = [] } = useUsers();
   const orCreateDMMutation = useOrCreateDM();
   const { data: messages = [], isLoading: messagesLoading } = useMessages(conversationId ?? undefined);
   const sendMessageMutation = useSendMessage();
@@ -29,6 +31,10 @@ export function DMPanel() {
       if (prevDMUserId.current !== selectedDMUserId) {
         prevDMUserId.current = selectedDMUserId;
         setConversationId(null);
+
+        const otherUserData = allUsers.find((u: any) => u.id === selectedDMUserId);
+        const userName = otherUserData?.name || 'User';
+        openTab({ id: selectedDMUserId, type: 'dm', name: userName });
 
         async function initDM() {
           const dmUserId = selectedDMUserId;
@@ -52,7 +58,7 @@ export function DMPanel() {
         initDM();
       }
     }
-  }, [selectedDMUserId, currentUserId, currentOrgId, orCreateDMMutation, addToast]);
+  }, [selectedDMUserId, currentUserId, currentOrgId, orCreateDMMutation, addToast, openTab, allUsers]);
 
   // Reset when panel closes
   useEffect(() => {
@@ -62,6 +68,32 @@ export function DMPanel() {
       setMessage('');
     }
   }, [selectedDMUserId]);
+
+  // Store conversationId in global map for notification watcher
+  useEffect(() => {
+    if (conversationId && selectedDMUserId) {
+      setDMConversation(selectedDMUserId, conversationId);
+    }
+  }, [conversationId, selectedDMUserId, setDMConversation]);
+
+  // Load/save drafts for the current DM user
+  useEffect(() => {
+    if (!selectedDMUserId) return;
+    const draftKey = `dm-${selectedDMUserId}`;
+    const draft = messageDrafts[draftKey] || '';
+    setMessage(draft);
+  }, [selectedDMUserId, messageDrafts]);
+
+  // persist drafts as the user types (debounced)
+  useEffect(() => {
+    if (!selectedDMUserId) return;
+    const draftKey = `dm-${selectedDMUserId}`;
+    const tid = setTimeout(() => {
+      if (message.trim()) setMessageDraft(draftKey, message);
+      else clearMessageDraft(draftKey);
+    }, 300);
+    return () => clearTimeout(tid);
+  }, [message, selectedDMUserId, setMessageDraft, clearMessageDraft]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -90,7 +122,15 @@ export function DMPanel() {
     if (!message.trim() || !conversationId || !currentUserId) return;
     if (sendMessageMutation.isPending) return;
 
-    // Use mutate (not mutateAsync) so hook-level onMutate/onSuccess/onError/onSettled all fire
+    sendMessageMutation.mutate({
+      channelId: conversationId,
+      content: message.trim(),
+      authorId: currentUserId,
+    });
+  }, [message, conversationId, currentUserId, sendMessageMutation]);
+
+  const handleRetry = useCallback(() => {
+    if (!message.trim() || !conversationId || !currentUserId) return;
     sendMessageMutation.mutate({
       channelId: conversationId,
       content: message.trim(),
@@ -108,6 +148,21 @@ export function DMPanel() {
       setTimeout(() => {
         textarea.focus();
         textarea.setSelectionRange(start + emoji.length, start + emoji.length);
+      }, 0);
+    }
+  };
+
+  const insertFormat = (prefix: string, suffix: string = prefix) => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const selected = message.substring(start, end);
+      const newContent = message.substring(0, start) + prefix + selected + suffix + message.substring(end);
+      setMessage(newContent);
+      setTimeout(() => {
+        textarea.focus();
+        textarea.setSelectionRange(start + prefix.length, end + prefix.length);
       }, 0);
     }
   };
@@ -157,26 +212,51 @@ export function DMPanel() {
               <span style={{ color: 'var(--fg-dim)' }}> loading...</span>
             </div>
           ) : messages.length === 0 ? (
-            <div style={{ padding: 24, textAlign: 'center', color: 'var(--fg-dim)', fontSize: 12 }}>
-              <span className="prompt-symbol">$</span>
-              <span style={{ color: 'var(--fg-dim)' }}> dm --with </span>
-              <span style={{ color: 'var(--cyan)' }}>{otherUserName}</span>
-              <div style={{ marginTop: 8 }}>// no messages yet, start the conversation</div>
+            <div style={{ padding: 32, display: 'flex', flexDirection: 'column', gap: 4, fontFamily: 'var(--font)' }}>
+              <div style={{ fontSize: 12, color: 'var(--fg-dim)', marginBottom: 8 }}>
+                <span className="prompt-symbol" style={{ color: 'var(--green)' }}>$</span>
+                <span style={{ color: 'var(--fg-dim)' }}> dm --with </span>
+                <span style={{ color: 'var(--cyan)' }}>{otherUserName}</span>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--fg-dim)', lineHeight: 1.8 }}>
+                <div>// no messages yet — start the conversation</div>
+                <div>
+                  type below and press{' '}
+                  <span style={{
+                    background: 'var(--bg-elevated)',
+                    border: '1px solid var(--border)',
+                    padding: '1px 5px',
+                    fontSize: 10,
+                    color: 'var(--fg-muted)',
+                  }}>Enter</span>
+                  {' '}to send,{' '}
+                  <span style={{
+                    background: 'var(--bg-elevated)',
+                    border: '1px solid var(--border)',
+                    padding: '1px 5px',
+                    fontSize: 10,
+                    color: 'var(--fg-muted)',
+                  }}>Shift+Enter</span>
+                  {' '}for new line
+                </div>
+              </div>
             </div>
           ) : messages.map((msg: any, idx: number) => {
             const isMine = msg.authorId === currentUserId;
+            const sender = allUsers.find((u: any) => u.id === msg.authorId);
+            const senderName = sender?.name || 'User';
             const prevMsg = messages[idx - 1];
             const showAvatar = !prevMsg || prevMsg.authorId !== msg.authorId;
 
             return (
               <div key={msg._id} className={`dm-message ${isMine ? 'mine' : 'theirs'} ${showAvatar ? '' : 'no-avatar'}`}>
                 {!isMine && showAvatar && (
-                  <Avatar name={otherUserName} size="sm" />
+                  <Avatar name={senderName} size="sm" />
                 )}
                 {!isMine && !showAvatar && <div className="dm-avatar-space" />}
                 <div className="dm-message-content">
                   {showAvatar && !isMine && (
-                    <span className="dm-sender-name">{otherUserName}</span>
+                    <span className="dm-sender-name">{senderName}</span>
                   )}
                   <div className="dm-bubble">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
@@ -195,34 +275,58 @@ export function DMPanel() {
             Failed to send — type and click Send to retry
           </div>
         )}
-        <div className="dm-composer-inner">
-          <textarea
-            ref={textareaRef}
-            value={message}
-            onChange={e => setMessage(e.target.value)}
-            placeholder={`Message ${otherUserName}...`}
-            rows={1}
-            onKeyDown={e => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSend();
-              }
-            }}
-            className="oc-input"
-            disabled={isLoading}
-          />
-          <div className="dm-composer-actions">
-            <button type="button" className="dm-tool-btn" onClick={() => setShowEmoji(!showEmoji)}>
-              <Smile size={18} />
-            </button>
-            <button
-              type="button"
-              className="dm-send-btn"
-              onClick={handleSend}
-              disabled={!message.trim() || isLoading || sendMessageMutation.isPending}
-            >
-              <Send size={18} />
-            </button>
+        <div className="dm-prompt-line">
+          <span className="prompt-user">{currentUser?.name?.split(' ')[0] || 'user'}</span>
+          <span className="prompt-at">@</span>
+          <span className="prompt-host">devlink</span>
+          <span className="prompt-path">:~/{otherUserName}</span>
+          <span className="prompt-symbol">$</span>
+          <span className="prompt-cmd"> send --dm</span>
+        </div>
+        <div className="dm-toolbar">
+          <button className="dm-tool-btn" title="Bold (Ctrl+B)" onClick={() => insertFormat('**')}>
+            <Bold size={14} />
+          </button>
+          <button className="dm-tool-btn" title="Italic (Ctrl+I)" onClick={() => insertFormat('_')}>
+            <Italic size={14} />
+          </button>
+          <button className="dm-tool-btn" title="Inline code" onClick={() => insertFormat('`')}>
+            <Code size={14} />
+          </button>
+          <button className="dm-tool-btn" title="Link" onClick={() => insertFormat('[', '](url)')}>
+            <Link2 size={14} />
+          </button>
+        </div>
+        <div className="dm-composer-body">
+          <div className="dm-input-wrap">
+            <textarea
+              ref={textareaRef}
+              value={message}
+              onChange={e => setMessage(e.target.value)}
+              placeholder={`Message ${otherUserName}...`}
+              rows={1}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+              className="dm-textarea"
+              disabled={!conversationId}
+            />
+            <div className="dm-composer-actions">
+              <button type="button" className="dm-tool-btn" onClick={() => setShowEmoji(!showEmoji)}>
+                <Smile size={18} />
+              </button>
+              <button
+                type="button"
+                className="dm-send-btn"
+                onClick={handleSend}
+                disabled={!message.trim() || !conversationId || sendMessageMutation.isPending}
+              >
+                <Send size={18} />
+              </button>
+            </div>
           </div>
         </div>
         {showEmoji && (

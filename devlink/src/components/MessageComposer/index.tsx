@@ -7,7 +7,9 @@ export function MessageComposer() {
   const sendMessageMutation = useSendMessage();
   const setMessageDraft = useUIStore((state) => state.setMessageDraft);
   const clearMessageDraft = useUIStore((state) => state.clearMessageDraft);
-  const selectedChannelId = useUIStore((s) => s.selectedChannelId);
+  const selectedChannelIdFromStore = useUIStore((s) => s.selectedChannelId);
+  const activeTabId = useUIStore((s) => s.activeTabId);
+  const openTabs = useUIStore((s) => s.openTabs);
   const currentUserId = useUIStore((s) => s.currentUserId);
   const addToast = useUIStore((state) => state.addToast);
   const messageDrafts = useUIStore((s) => s.messageDrafts);
@@ -15,6 +17,9 @@ export function MessageComposer() {
   const [showEmoji, setShowEmoji] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const activeTab = openTabs.find(t => t.id === activeTabId);
+  const currentChannelId = activeTab?.type === 'channel' ? activeTabId : selectedChannelIdFromStore;
 
   const quickEmojis = ['😀', '😂', '😍', '👍', '🎉', '🚀', '💡', '❤️', '🔥', '😎', '🤔', '👏'];
 
@@ -32,32 +37,32 @@ export function MessageComposer() {
 
   // Load/save drafts for the current channel
   useEffect(() => {
-    const draft = selectedChannelId ? messageDrafts[selectedChannelId] || '' : '';
+    const draft = currentChannelId ? messageDrafts[currentChannelId] || '' : '';
     setMessage(draft);
-  }, [selectedChannelId, messageDrafts]);
+  }, [currentChannelId, messageDrafts]);
 
   // persist drafts as the user types (debounced)
   useEffect(() => {
-    if (!selectedChannelId) return;
+    if (!currentChannelId) return;
     const tid = setTimeout(() => {
-      if (message.trim()) setMessageDraft(selectedChannelId, message);
-      else clearMessageDraft(selectedChannelId);
+      if (message.trim()) setMessageDraft(currentChannelId, message);
+      else clearMessageDraft(currentChannelId);
     }, 300);
     return () => clearTimeout(tid);
-  }, [message, selectedChannelId, setMessageDraft, clearMessageDraft]);
+  }, [message, currentChannelId, setMessageDraft, clearMessageDraft]);
 
   const handleSend = useCallback(async () => {
-    if (!message.trim() || !selectedChannelId || !currentUserId) return;
+    if (!message.trim() || !currentChannelId || !currentUserId) return;
     if (sendMessageMutation.isPending) return; // prevent double-send
 
     setIsSending(true);
     try {
       await sendMessageMutation.mutateAsync({
-        channelId: selectedChannelId,
+        channelId: currentChannelId,
         content: message.trim(),
         authorId: currentUserId,
       });
-      clearMessageDraft(selectedChannelId);
+      clearMessageDraft(currentChannelId);
       setMessage('');
       setShowEmoji(false);
     } catch (err: any) {
@@ -69,16 +74,16 @@ export function MessageComposer() {
     } finally {
       setIsSending(false);
     }
-  }, [message, selectedChannelId, currentUserId, sendMessageMutation, clearMessageDraft, addToast]);
+  }, [message, currentChannelId, currentUserId, sendMessageMutation, clearMessageDraft, addToast]);
 
   const handleRetry = useCallback(() => {
-    if (!message.trim() || !selectedChannelId || !currentUserId) return;
+    if (!message.trim() || !currentChannelId || !currentUserId) return;
     sendMessageMutation.mutate({
-      channelId: selectedChannelId,
+      channelId: currentChannelId,
       content: message.trim(),
       authorId: currentUserId,
     });
-  }, [message, selectedChannelId, currentUserId, sendMessageMutation]);
+  }, [message, currentChannelId, currentUserId, sendMessageMutation]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
@@ -163,17 +168,17 @@ export function MessageComposer() {
           <textarea
             ref={textareaRef}
             className="composer-textarea"
-            placeholder={selectedChannelId ? "Message #channel..." : "Select a channel to send a message..."}
+            placeholder={currentChannelId ? "Message #channel..." : "Select a channel to send a message..."}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={handleKeyDown}
             rows={1}
-            disabled={isSending || !selectedChannelId}
+            disabled={isSending || !currentChannelId}
           />
           <button
             className={`composer-send ${hasError ? 'composer-send-error' : ''}`}
             onClick={hasError ? handleRetry : handleSend}
-            disabled={!message.trim() || isSending || !selectedChannelId}
+            disabled={!message.trim() || isSending || !currentChannelId}
             title={hasError ? "Retry (click)" : "Send (Ctrl+Enter)"}
           >
             {hasError ? (

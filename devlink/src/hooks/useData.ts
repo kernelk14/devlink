@@ -680,19 +680,35 @@ export function useOrCreateDM() {
   });
 }
 
-export function useMyDMs(userId: string | undefined) {
+export function useMyDMs(userId: string | undefined, orgId: string | undefined) {
   const convexDMs = useConvexQuery(
     api.dms.getMyDMs,
-    userId ? { userId } : 'skip'
+    userId && orgId ? { userId, orgId } : 'skip'
   );
 
   return useQuery({
-    queryKey: ['dms', userId],
+    queryKey: ['dms', userId, orgId],
     queryFn: async () => {
       if (convexDMs) return convexDMs;
       throw new Error('Waiting for Convex data...');
     },
-    enabled: !!userId,
+    enabled: !!userId && !!orgId,
+  });
+}
+
+export function useDM(dmId: string | undefined) {
+  const convexDM = useConvexQuery(
+    api.dms.getDM,
+    dmId ? { dmId: dmId as any } : 'skip'
+  );
+
+  return useQuery({
+    queryKey: ['dm', dmId],
+    queryFn: async () => {
+      if (convexDM) return convexDM;
+      throw new Error('Waiting for Convex data...');
+    },
+    enabled: !!dmId,
   });
 }
 

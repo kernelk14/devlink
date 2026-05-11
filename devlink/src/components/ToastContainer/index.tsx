@@ -28,7 +28,7 @@ export function ToastContainer() {
       <style>{`
         .toast-container {
           position: fixed;
-          bottom: 20px;
+          top: 52px;
           right: 20px;
           display: flex;
           flex-direction: column;

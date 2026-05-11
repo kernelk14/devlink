@@ -11,17 +11,13 @@ export const getOrCreateDM = mutation({
   handler: async (ctx, args) => {
     const participants = [args.user1Id, args.user2Id].sort();
 
-    // Check if DM already exists
-    const allDMs = await ctx.db
+    // Check if DM already exists using participants index
+    const existingDMs = await ctx.db
       .query("directMessages")
-      .collect();
+      .withIndex("by_participants", (q) => q.eq("participantIds", participants))
+      .first();
 
-    const existing = allDMs.find(dm => {
-      const p = dm.participantIds.sort();
-      return p[0] === participants[0] && p[1] === participants[1];
-    });
-
-    if (existing) return existing._id.toString();
+    if (existingDMs) return existingDMs._id.toString();
 
     // Create new DM conversation
     const now = Date.now();
@@ -36,15 +32,38 @@ export const getOrCreateDM = mutation({
   },
 });
 
-// Get all DM conversations for a user
+// Get all DM conversations for a user in an org
 export const getMyDMs = query({
-  args: { userId: v.string() },
+  args: {
+    userId: v.string(),
+    orgId: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
     const allDMs = await ctx.db
       .query("directMessages")
       .collect();
 
-    // Filter DMs that include the given userId
-    return allDMs.filter(dm => dm.participantIds.includes(args.userId));
+    return allDMs
+      .filter(dm => dm.participantIds.includes(args.userId))
+      .sort((a, b) => b.lastActivity - a.lastActivity);
+  },
+});
+
+// Get a specific DM by ID
+export const getDM = query({
+  args: { dmId: v.id("directMessages") },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.dmId);
+  },
+});
+
+// Get DMs by org
+export const getDMsByOrg = query({
+  args: { orgId: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("directMessages")
+      .withIndex("by_org", (q) => q.eq("orgId", args.orgId))
+      .collect();
   },
 });
