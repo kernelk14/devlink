@@ -4,6 +4,7 @@ import { ConvexProvider, ConvexReactClient } from "convex/react";
 import { QueryClientProvider } from '@tanstack/react-query';
 import { App } from './App'
 import './styles/globals.css'
+import 'highlight.js/styles/github-dark.css'
 import { useKeyboardShortcuts } from './lib/hooks'
 import { queryClient } from './lib/queryClient'
 

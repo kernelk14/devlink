@@ -1,11 +1,26 @@
+import { useMemo } from 'react';
+import hljs from 'highlight.js';
+
 interface CodeBlockProps {
   code: string;
   lang: string;
 }
 
 export function CodeBlock({ code, lang }: CodeBlockProps) {
+  const html = useMemo(() => {
+    try {
+      if (lang && hljs.getLanguage(lang)) {
+        return hljs.highlight(code, { language: lang }).value;
+      }
+      return hljs.highlightAuto(code).value;
+    } catch {
+      return code.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+  }, [code, lang]);
+
   const lines = code.split('\n');
   const hasMultipleLines = lines.length > 1;
+  const highlightedLines = useMemo(() => html.split('\n'), [html]);
 
   return (
     <div className="code-block-wrapper">
@@ -23,12 +38,18 @@ export function CodeBlock({ code, lang }: CodeBlockProps) {
         </button>
       </div>
       <div className="code-block-body">
-        {hasMultipleLines && (
-          <div className="code-block-numbers">
-            {lines.map((_, i) => <span key={i}>{i + 1}</span>)}
+        {hasMultipleLines ? (
+          <div className="code-block-lines">
+            {highlightedLines.map((line, i) => (
+              <div key={i} className="code-block-line">
+                <span className="code-block-line-num">{i + 1}</span>
+                <span className="code-block-line-code" dangerouslySetInnerHTML={{ __html: line || ' ' }} />
+              </div>
+            ))}
           </div>
+        ) : (
+          <pre className="code-block-pre"><code dangerouslySetInnerHTML={{ __html: html }} /></pre>
         )}
-        <pre className="code-block-pre"><code>{code}</code></pre>
       </div>
     </div>
   );

@@ -7,7 +7,7 @@ import { PeopleModal } from '@/components/PeopleModal';
 import { NotificationsModal } from '@/components/NotificationsModal';
 
 export function ChannelSidebar() {
-  const { selectedChannelId, setSelectedChannel, starredChannels, toggleStarredChannel, setSelectedDMUser, currentOrgId, currentUserId, openTab } = useUIStore();
+  const { selectedChannelId, setSelectedChannel, starredChannels, toggleStarredChannel, setSelectedDMUser, currentOrgId, currentOrgName, currentUserId, openTab, setActiveTab, openTabs } = useUIStore();
   const { data: channels = [], isLoading, isError } = useChannels(currentOrgId || undefined, currentUserId || undefined);
   const { data: allUsers = [] } = useUsers();
   const { data: currentUserData } = useUser(currentUserId || undefined);
@@ -54,7 +54,7 @@ export function ChannelSidebar() {
         </div>
         <div className="stb-title">
           <span style={{ color: 'var(--fg-dim)' }}>#</span>
-          <span style={{ fontSize: 12 }}>devlink</span>
+          <span style={{ fontSize: 12 }}>{currentOrgName}</span>
         </div>
         <button className="stb-btn" title="Workspace options">
           <ChevronDown size={12} />
@@ -64,7 +64,7 @@ export function ChannelSidebar() {
       {/* Terminal prompt line */}
       <div className="sidebar-prompt-line">
         <span className="prompt-user" style={{ fontSize: 11 }}>{currentUser?.name?.split(' ')[0] || 'user'}</span>
-        <span style={{ color: 'var(--fg-dim)' }}>@devlink:~$</span>
+        <span style={{ color: 'var(--fg-dim)' }}>@{currentOrgName}:~$</span>
         <span style={{ color: 'var(--cyan)', fontSize: 11 }}> ls --channels</span>
       </div>
 
@@ -136,15 +136,23 @@ export function ChannelSidebar() {
                 key={userId}
                 className="channel-item"
                 onClick={() => {
-                  setSelectedDMUser(userId);
-                  openTab({ id: userId, type: 'dm', name: user.name || 'Unknown' });
+                  const existing = openTabs.find(t => t.type === 'profile' && t.userId === userId);
+                  if (existing) {
+                    setActiveTab(existing.id);
+                  } else {
+                    openTab({ id: `profile-${userId}`, type: 'profile', name: user.username, userId });
+                  }
                 }}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
-                    setSelectedDMUser(userId);
-                    openTab({ id: userId, type: 'dm', name: user.name || 'Unknown' });
+                    const existing = openTabs.find(t => t.type === 'profile' && t.userId === userId);
+                    if (existing) {
+                      setActiveTab(existing.id);
+                    } else {
+                      openTab({ id: `profile-${userId}`, type: 'profile', name: user.username, userId });
+                    }
                   }
                 }}
               >
@@ -176,7 +184,7 @@ export function ChannelSidebar() {
                     }} />
                   </span>
                 </span>
-                <span className="ch-name">{user.name || 'Unknown'}</span>
+                <span className="ch-name">{user.name} ({user.username})</span>
               </div>
             );
           }) : (
@@ -205,14 +213,14 @@ export function ChannelSidebar() {
                 className="channel-item"
                 onClick={() => {
                   setSelectedDMUser(userId);
-                  openTab({ id: userId, type: 'dm', name: user.name || 'Unknown' });
+                  openTab({ id: userId, type: 'dm', name: user.username });
                 }}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     setSelectedDMUser(userId);
-                    openTab({ id: userId, type: 'dm', name: user.name || 'Unknown' });
+                    openTab({ id: userId, type: 'dm', name: user.username });
                   }
                 }}
               >
@@ -244,7 +252,7 @@ export function ChannelSidebar() {
                     }} />
                   </span>
                 </span>
-                <span className="ch-name">{user.name || 'Unknown'}</span>
+                <span className="ch-name">{user.name} ({user.username})</span>
               </div>
             );
           })}

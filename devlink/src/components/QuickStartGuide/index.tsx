@@ -25,6 +25,17 @@ const steps: Step[] = [
     ],
   },
   {
+    title: 'Quick Setup Guide',
+    content: 'Set up your profile to make DevLink yours. Add your display name and connect your accounts.',
+    icon: <Settings size={28} />,
+    bullets: [
+      'Click your avatar in the bottom-left to edit your profile',
+      'Set your display name and status',
+      'Connect with teammates by adding them as contacts',
+      'Configure notifications from the bell icon',
+    ],
+  },
+  {
     title: 'Join Channels',
     content: 'Channels are your project rooms. Each one keeps topic-specific discussions together and easy to follow.',
     icon: <Hash size={28} />,

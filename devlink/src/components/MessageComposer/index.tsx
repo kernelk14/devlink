@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useUIStore } from '@/lib/store';
-import { useSendMessage, useUser } from '@/hooks/useData';
+import { useSendMessage, useUser, useUsers } from '@/hooks/useData';
 import { Paperclip, Bold, Italic, Code, Link2, Smile, Zap, RefreshCw } from 'lucide-react';
 
 export function MessageComposer() {
@@ -13,10 +13,16 @@ export function MessageComposer() {
   const currentUserId = useUIStore((s) => s.currentUserId);
   const addToast = useUIStore((state) => state.addToast);
   const messageDrafts = useUIStore((s) => s.messageDrafts);
+  const currentOrgName = useUIStore((s) => s.currentOrgName);
   const [message, setMessage] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [mentionOpen, setMentionOpen] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const mentionStartRef = useRef<number>(-1);
+  const { data: allUsers = [] } = useUsers();
 
   const activeTab = openTabs.find(t => t.id === activeTabId);
   const currentChannelId = activeTab?.type === 'channel' ? activeTabId : selectedChannelIdFromStore;
@@ -50,6 +56,41 @@ export function MessageComposer() {
     }, 300);
     return () => clearTimeout(tid);
   }, [message, currentChannelId, setMessageDraft, clearMessageDraft]);
+
+  const filteredUsers = mentionQuery
+    ? allUsers.filter((u: any) => u.username?.toLowerCase().includes(mentionQuery.toLowerCase()) && u.id !== currentUserId)
+    : [];
+
+  const insertMention = (username: string) => {
+    const before = message.slice(0, mentionStartRef.current);
+    const after = message.slice(mentionStartRef.current);
+    const rest = after.replace(/^@[a-z0-9_]*/i, '');
+    setMessage(`${before}@${username} ${rest}`);
+    setMentionOpen(false);
+    setMentionQuery('');
+    mentionStartRef.current = -1;
+    setTimeout(() => textareaRef.current?.focus(), 0);
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    const pos = e.target.selectionStart;
+    setMessage(val);
+
+    // Detect @mention trigger
+    const textBeforeCursor = val.slice(0, pos);
+    const atMatch = textBeforeCursor.match(/@([a-z0-9_]*)$/i);
+    if (atMatch) {
+      mentionStartRef.current = atMatch.index!;
+      setMentionQuery(atMatch[1] || '');
+      setMentionOpen(true);
+      setMentionIndex(0);
+    } else {
+      setMentionOpen(false);
+      setMentionQuery('');
+      mentionStartRef.current = -1;
+    }
+  };
 
   const handleSend = useCallback(async () => {
     if (!message.trim() || !currentChannelId || !currentUserId) return;
@@ -86,6 +127,29 @@ export function MessageComposer() {
   }, [message, currentChannelId, currentUserId, sendMessageMutation]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (mentionOpen && filteredUsers.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setMentionIndex(i => Math.min(i + 1, filteredUsers.length - 1));
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setMentionIndex(i => Math.max(i - 1, 0));
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        insertMention(filteredUsers[mentionIndex].username);
+        return;
+      }
+      if (e.key === 'Escape') {
+        setMentionOpen(false);
+        setMentionQuery('');
+        mentionStartRef.current = -1;
+        return;
+      }
+    }
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       handleSend();
@@ -132,7 +196,7 @@ export function MessageComposer() {
       <div className="composer-prompt-line">
         <span className="prompt-user">{userName}</span>
         <span className="prompt-at">@</span>
-        <span className="prompt-host">devlink</span>
+        <span className="prompt-host">{currentOrgName}</span>
         <span className="prompt-symbol">$</span>
         <span className="prompt-cmd"> send --msg</span>
       </div>
@@ -170,11 +234,25 @@ export function MessageComposer() {
             className="composer-textarea"
             placeholder={currentChannelId ? "Message #channel..." : "Select a channel to send a message..."}
             value={message}
-            onChange={(e) => setMessage(e.target.value)}
+            onChange={handleChange}
             onKeyDown={handleKeyDown}
             rows={1}
             disabled={isSending || !currentChannelId}
           />
+          {mentionOpen && filteredUsers.length > 0 && (
+            <div className="mention-dropdown">
+              {filteredUsers.slice(0, 8).map((u: any, i: number) => (
+                <div
+                  key={u.id}
+                  className={`mention-item ${i === mentionIndex ? 'active' : ''}`}
+                  onMouseDown={(e) => { e.preventDefault(); insertMention(u.username); }}
+                >
+                  <span className="mention-item-name">@{u.username}</span>
+                  <span className="mention-item-full">{u.name}</span>
+                </div>
+              ))}
+            </div>
+          )}
           <button
             className={`composer-send ${hasError ? 'composer-send-error' : ''}`}
             onClick={hasError ? handleRetry : handleSend}

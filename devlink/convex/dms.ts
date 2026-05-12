@@ -36,7 +36,7 @@ export const getOrCreateDM = mutation({
 export const getMyDMs = query({
   args: {
     userId: v.string(),
-    orgId: v.optional(v.string()),
+    orgId: v.string(),
   },
   handler: async (ctx, args) => {
     const allDMs = await ctx.db

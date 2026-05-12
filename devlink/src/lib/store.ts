@@ -44,8 +44,9 @@ export interface FailedMessage {
 
 interface OpenTab {
   id: string;
-  type: 'channel' | 'dm';
+  type: 'channel' | 'dm' | 'profile';
   name: string;
+  userId?: string;
 }
 
 interface UIState {
@@ -71,6 +72,7 @@ interface UIState {
   isAuthenticated: boolean;
   currentEmail: string;
   currentOrgId: string;
+  currentOrgName: string;
   currentUserStatus: UserStatus;
   unreadChannels: string[];
   typingUsers: Record<string, string[]>;
@@ -107,7 +109,7 @@ interface UIState {
   clearHighlight: () => void;
   login: (email: string, userId: string) => void;
   logout: () => void;
-  switchOrg: (orgId: string) => void;
+  switchOrg: (orgId: string, orgName?: string) => void;
   setCurrentUserStatus: (status: UserStatus) => void;
   markChannelRead: (channelId: string) => void;
   markChannelUnread: (channelId: string) => void;
@@ -160,6 +162,7 @@ export const useUIStore = create<UIState>()(
       isAuthenticated: false,
       currentEmail: '',
       currentOrgId: 'o1',
+      currentOrgName: 'devlink',
       currentUserStatus: 'online' as UserStatus,
       unreadChannels: [],
       typingUsers: {},
@@ -290,8 +293,9 @@ export const useUIStore = create<UIState>()(
         state.isOnline = false;
       }),
 
-      switchOrg: (orgId) => set((state) => {
+      switchOrg: (orgId, orgName) => set((state) => {
         state.currentOrgId = orgId;
+        if (orgName) state.currentOrgName = orgName;
       }),
 
       setCurrentUserStatus: (status) => set((state) => {

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useUIStore, getCurrentUser } from '@/lib/store';
-import { useChannels, useOrganizations, useUser, useUpdateUser } from '@/hooks/useData';
+import { useChannels, useOrganizations, useUser, useUsers, useUpdateUser, useConnectUser } from '@/hooks/useData';
 import { usePreferences } from '@/lib/hooks';
+import { MessageSquare, UserPlus, UserCheck, AtSign } from 'lucide-react';
 import { SearchModal } from '@/components/SearchModal';
 import { LoginModal } from '@/components/LoginModal';
 import { UserProfileModal } from '@/components/UserProfileModal';
@@ -15,6 +16,7 @@ import { ThreadPanel } from '@/components/ThreadPanel';
 import { DMPanel } from '@/components/DMPanel';
 import { TabsBar } from '@/components/TabsBar';
 import { QuickStartGuide } from '@/components/QuickStartGuide';
+import { OrgSetupModal } from '@/components/OrgSetupModal';
 import { ToastContainer } from '@/components/ToastContainer';
 import { MessageNotificationWatcher } from '@/components/MessageNotificationWatcher';
 import { Avatar } from '@/components/ui/Avatar';
@@ -72,7 +74,7 @@ function useSidebarResizer() {
 }
 
 export function App() {
-  const { isAuthenticated, selectedChannelId, selectedThreadId, selectedDMUserId, sidebarCollapsed, toggleSidebar, toggleShortcutsModal, switchOrg, currentOrgId, setSelectedChannel, currentUserId, openTab, activeTabId, openTabs, showQuickStartGuide, setShowQuickStartGuide, dmConversationMap } = useUIStore();
+  const { isAuthenticated, selectedChannelId, selectedThreadId, selectedDMUserId, sidebarCollapsed, toggleSidebar, toggleShortcutsModal, switchOrg, currentOrgId, currentOrgName, setSelectedChannel, currentUserId, setSelectedDMUser, openTab, closeTab, activeTabId, openTabs, showQuickStartGuide, setShowQuickStartGuide, dmConversationMap, addToast } = useUIStore();
   const { data: channels = [] } = useChannels(currentOrgId || undefined, currentUserId || undefined);
   const { preferences } = usePreferences();
   const currentUser = getCurrentUser();
@@ -85,15 +87,16 @@ export function App() {
   const [showUserProfile, setShowUserProfile] = useState<string | null>(null);
   const [showLogin, setShowLogin] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [showOrgSetup, setShowOrgSetup] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const { data: orgs } = useOrganizations();
 
   // Sync the real Convex org ID into the store and auto-select first channel
   useEffect(() => {
     if (orgs && orgs.length > 0) {
-      const realOrgId = (orgs[0] as any)._id;
-      if (realOrgId && realOrgId !== currentOrgId) {
-        switchOrg(realOrgId);
+      const firstOrg = orgs[0] as any;
+      if (firstOrg?._id && firstOrg._id !== currentOrgId) {
+        switchOrg(firstOrg._id, firstOrg.name || firstOrg.slug);
       }
     }
   }, [orgs]);
@@ -107,14 +110,24 @@ export function App() {
   }, [channels, selectedChannelId, selectedDMUserId, activeTabId, setSelectedChannel, openTab]);
 
   useEffect(() => {
-    if (isAuthenticated) {
-      if (currentUserData?.is_new_user) {
+    if (isAuthenticated && currentUserData) {
+      if (currentUserData.is_new_user && !currentUserData.orgId) {
+        setShowOrgSetup(true);
+        setShowQuickStartGuide(false);
+      } else if (currentUserData.is_new_user) {
+        setShowOrgSetup(false);
         setShowQuickStartGuide(true);
       } else {
+        setShowOrgSetup(false);
         setShowQuickStartGuide(false);
       }
     }
   }, [isAuthenticated, currentUserData, setShowQuickStartGuide]);
+
+  const handleOrgSetupComplete = () => {
+    setShowOrgSetup(false);
+    setShowQuickStartGuide(true);
+  };
 
   useSidebarResizer();
 
@@ -135,9 +148,8 @@ export function App() {
 
   const channel = channels.find((c: any) => c._id === selectedChannelId);
   const activeTab = openTabs.find(t => t.id === activeTabId);
-  const activeChannelName = activeTab?.type === 'channel' ? activeTab.name : (activeTab?.type === 'dm' ? `dm/${activeTab.name}` : channel?.name || 'general');
-  // TODO: Implement threads query from Convex
-  const thread = undefined;
+  const activeChannelName = activeTab?.type === 'channel' ? activeTab.name : (activeTab?.type === 'dm' ? `dm/${activeTab.name}` : (activeTab?.type === 'profile' ? `profile/${activeTab.name}` : channel?.name || 'general'));
+  const { data: profileUser } = useUser(activeTab?.type === 'profile' ? (activeTab.userId || activeTab.id) : undefined);
 
   const handleKeyDown = (e: KeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -182,7 +194,7 @@ export function App() {
             <div className="auth-prompt">
               <span className="prompt-user">guest</span>
               <span className="prompt-at">@</span>
-              <span className="prompt-host">devlink</span>
+              <span className="prompt-host">{currentOrgName}</span>
               <span className="prompt-path">:~$</span>
               <input
                 type="text"
@@ -234,7 +246,7 @@ export function App() {
             <span className="dot dot-green" />
           </div>
           <div className="titlebar-title">
-            <span className="prompt-path" style={{ fontSize: 12 }}>~/{activeChannelName}</span>
+            <span className="prompt-path" style={{ fontSize: 12 }}>~{currentUserData?.username || currentUser?.name?.split(' ')[0] || 'user'}</span>
             <span className="prompt-symbol" style={{ fontSize: 12 }}>$</span>
           </div>
           <div className="titlebar-actions">
@@ -265,13 +277,21 @@ export function App() {
         <div className="terminal-body">
           {activeTab?.type === 'dm' ? (
             <DMPanel />
+          ) : activeTab?.type === 'profile' ? (
+            <ProfileTabContent
+              profileUser={profileUser}
+              currentUserId={currentUserId}
+              setSelectedDMUser={setSelectedDMUser}
+              addToast={addToast}
+              onClose={() => closeTab(activeTab?.id || '')}
+            />
           ) : (
             <div className="messages-area">
               <MessageList />
               <MessageComposer />
             </div>
           )}
-          {preferences.showThreads && thread && <ThreadPanel />}
+          {selectedThreadId && <ThreadPanel />}
         </div>
 
         {/* ── Terminal Status Bar ─── */}
@@ -301,9 +321,10 @@ export function App() {
       {showNotificationSettings && <NotificationSettingsModal onClose={() => setShowNotificationSettings(false)} />}
       {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} />}
       {showUserProfile && <UserProfileModal userId={showUserProfile} onClose={() => setShowUserProfile(null)} />}
+      {showOrgSetup && <OrgSetupModal onComplete={handleOrgSetupComplete} />}
       {showQuickStartGuide && <QuickStartGuide onClose={handleQuickStartClose} />}
       <ToastContainer />
-      {openTabs.map(tab => {
+      {openTabs.filter(tab => tab.type !== 'profile').map(tab => {
         const convId = tab.type === 'dm' ? dmConversationMap[tab.id] : tab.id;
         if (!convId) return null;
         return (
@@ -317,6 +338,111 @@ export function App() {
           />
         );
       })}
+    </div>
+  );
+}
+
+function ProfileTabContent({ profileUser, currentUserId, setSelectedDMUser, addToast, onClose }: any) {
+  const connectUserMutation = useConnectUser();
+  const { data: allUsers } = useUsers();
+  const { data: currentUserData } = useUser(currentUserId || undefined);
+  const isMe = currentUserId === profileUser?._id;
+  const isContact = currentUserData?.contacts?.includes(profileUser?._id);
+
+  const handleMessage = () => {
+    setSelectedDMUser(profileUser._id);
+  };
+
+  const handleConnect = async () => {
+    if (!currentUserId || isMe || !profileUser) return;
+    try {
+      const res: any = await connectUserMutation.mutateAsync({ senderId: currentUserId, receiverId: profileUser._id });
+      addToast({ type: 'success', message: res?.message || `Connected with ${profileUser.name}` });
+    } catch {
+      addToast({ type: 'error', message: 'Failed to send request' });
+    }
+  };
+
+  const handleMention = () => {
+    const mention = `@${profileUser?.username || profileUser?.name?.toLowerCase().replace(/\s+/g, '')} `;
+    navigator.clipboard?.writeText(mention);
+    addToast({ type: 'info', message: `Mention copied: ${mention}` });
+  };
+
+  if (!profileUser) return (
+    <div className="messages-area" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 48 }}>
+      <div style={{ fontSize: 12, color: 'var(--fg-dim)' }}>loading profile...</div>
+    </div>
+  );
+
+  const statusColors: Record<string, string> = {
+    online: 'var(--green)', away: 'var(--yellow)', busy: 'var(--red)',
+    dnd: 'var(--red)', offline: 'var(--fg-dim)',
+  };
+
+  return (
+    <div className="messages-area" style={{ overflow: 'auto' }}>
+      <div style={{ maxWidth: 600, margin: '0 auto', padding: 24 }}>
+        {/* Header */}
+        <div style={{ display: 'flex', gap: 24, alignItems: 'center', marginBottom: 24, padding: 24, background: 'var(--bg-elevated)', borderRadius: 8, border: '1px solid var(--border)' }}>
+          <Avatar name={profileUser.name} size="xl" status={profileUser.status as any} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 20, fontWeight: 600 }}>{profileUser.name}</div>
+            <div style={{ fontSize: 13, color: 'var(--fg-muted)', marginTop: 2 }}>@{profileUser.username}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: statusColors[profileUser.status || 'offline'] }} />
+              <span style={{ fontSize: 12, color: statusColors[profileUser.status || 'offline'], textTransform: 'capitalize' }}>{profileUser.status || 'offline'}</span>
+              {profileUser.role && (
+                <>
+                  <span style={{ color: 'var(--fg-dim)', fontSize: 11 }}>|</span>
+                  <span style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{profileUser.role}</span>
+                </>
+              )}
+            </div>
+            {profileUser.statusMessage && (
+              <div style={{ marginTop: 8, fontSize: 12, color: 'var(--fg-muted)', fontStyle: 'italic', borderLeft: '2px solid var(--border)', paddingLeft: 8 }}>
+                "{profileUser.statusMessage}"
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Info */}
+        <div className="terminal-block" style={{ marginBottom: 24 }}>
+          <div className="terminal-line"><span className="prompt-symbol">$</span><span style={{ color: 'var(--fg-muted)' }}> name: </span><span style={{ color: 'var(--cyan)' }}>{profileUser.name}</span></div>
+          <div className="terminal-line"><span className="prompt-symbol">$</span><span style={{ color: 'var(--fg-muted)' }}> email: </span><span style={{ color: 'var(--fg)' }}>{profileUser.email}</span></div>
+          <div className="terminal-line"><span className="prompt-symbol">$</span><span style={{ color: 'var(--fg-muted)' }}> user_id: </span><span style={{ color: 'var(--fg-dim)', fontSize: 11 }}>{profileUser._id}</span></div>
+          {profileUser.role && (
+            <div className="terminal-line"><span className="prompt-symbol">$</span><span style={{ color: 'var(--fg-muted)' }}> role: </span><span style={{ color: 'var(--yellow)' }}>{profileUser.role}</span></div>
+          )}
+          {profileUser.createdAt && (
+            <div className="terminal-line"><span className="prompt-symbol">$</span><span style={{ color: 'var(--fg-muted)' }}> member_since: </span><span style={{ color: 'var(--fg)' }}>{format(new Date(profileUser.createdAt), 'MMM d, yyyy')}</span></div>
+          )}
+        </div>
+
+        {/* Actions */}
+        {!isMe && (
+          <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
+            <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleMessage}>
+              <MessageSquare size={14} />
+              message
+            </button>
+            <button
+              className={`btn ${isContact ? 'btn-ghost' : 'btn-secondary'}`}
+              style={{ flex: 1 }}
+              onClick={handleConnect}
+              disabled={isContact || connectUserMutation.isPending}
+            >
+              {isContact ? <UserCheck size={14} /> : <UserPlus size={14} />}
+              {isContact ? 'connected' : 'connect'}
+            </button>
+            <button className="btn btn-secondary" style={{ flex: 1 }} onClick={handleMention}>
+              <AtSign size={14} />
+              mention
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

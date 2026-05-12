@@ -43,8 +43,7 @@ export function MessageBubble({ message, author, isFirst, isLast, groupStart }: 
       <div className="message-main oc-message-main">
         {isFirst && (
           <div className="message-header">
-            <span className="author-name">{author.name}</span>
-            <span className="author-handle">@{author.username}</span>
+            <span className="author-name">{author.username}</span>
             <span className="timestamp">{format(new Date(message.createdAt), 'h:mm a')}</span>
             {message.isEdited && <span className="edited">(edited)</span>}
           </div>
@@ -67,9 +66,16 @@ export function MessageBubble({ message, author, isFirst, isLast, groupStart }: 
                   />
                 );
               },
+              strong({ children, ...props }) {
+                const text = String(children);
+                if (text.startsWith('@')) {
+                  return <span className="mention">{text}</span>;
+                }
+                return <strong {...props}>{children}</strong>;
+              },
             }}
           >
-            {message.content}
+            {message.content.replace(/(?<!\w)@([a-z0-9_]+)/gi, '**@$1**')}
           </ReactMarkdown>
         </div>
 
@@ -111,6 +117,7 @@ export function MessageBubble({ message, author, isFirst, isLast, groupStart }: 
               onClick={() => setSelectedThread(message.id)}
             >
               <MessageSquare size={16} />
+              {message.replies > 0 && <span className="action-btn-count">{message.replies}</span>}
             </button>
             <button className="action-btn" title="More actions">
               <MoreHorizontal size={16} />
@@ -291,6 +298,11 @@ export function MessageBubble({ message, author, isFirst, isLast, groupStart }: 
         .action-btn:hover {
           background: var(--bg-tertiary);
           color: var(--text-primary);
+        }
+        .action-btn-count {
+          font-size: 10px;
+          font-weight: 600;
+          margin-left: 2px;
         }
          .reaction-picker {
           position: absolute;

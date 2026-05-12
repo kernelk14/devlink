@@ -170,12 +170,14 @@ export function useUpdateUser() {
   const updateUserConvex = useConvexMutation(api.users.updateUser);
 
   return useMutation({
-    mutationFn: async ({ userId, name, username, avatar, color, is_new_user }: {
+    mutationFn: async ({ userId, name, username, avatar, color, orgId, role, is_new_user }: {
       userId: string;
       name?: string;
       username?: string;
       avatar?: string;
       color?: string;
+      orgId?: string;
+      role?: string;
       is_new_user?: boolean;
     }) => {
       return await updateUserConvex({
@@ -184,6 +186,8 @@ export function useUpdateUser() {
         username,
         avatar,
         color,
+        orgId,
+        role: role as any,
         is_new_user,
       });
     },
@@ -442,19 +446,27 @@ export function useMessages(channelId?: string) {
   });
 }
 
+export function useThreadReplies(parentMessageId: string | null) {
+  return useConvexQuery(
+    api.threads.getThreadReplies,
+    parentMessageId ? { parentMessageId } : 'skip'
+  );
+}
+
 export function useSendMessage() {
   const queryClient = useQueryClient();
   const sendMessageConvex = useConvexMutation(api.messages.sendMessage);
 
   return useMutation({
-    mutationFn: async ({ channelId, content, authorId }: {
+    mutationFn: async ({ channelId, content, authorId, threadId }: {
       channelId: string;
       content: string;
       authorId: string;
+      threadId?: string;
     }) => {
-      return await sendMessageConvex({ channelId, content, authorId });
+      return await sendMessageConvex({ channelId, content, authorId, threadId });
     },
-    onMutate: async ({ channelId, content, authorId }) => {
+    onMutate: async ({ channelId, content, authorId, threadId }) => {
       await queryClient.cancelQueries({ queryKey: ['messages', channelId] });
 
       const optimisticMessage = {
@@ -467,6 +479,7 @@ export function useSendMessage() {
         isPinned: false,
         reactions: [] as any[],
         replies: 0,
+        threadId,
         createdAt: Date.now(),
         updatedAt: null,
       };
@@ -687,6 +700,7 @@ export function useCreateOrganization() {
       name: string;
       slug: string;
       avatar?: string;
+      creatorId?: string;
     }) => Promise<string>,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ORGS_QUERY_KEY });

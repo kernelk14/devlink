@@ -73,5 +73,5 @@ export async function getGithubEmails(token: string): Promise<GithubEmail[]> {
 }
 
 export function buildGithubUsername(name: string | null, login: string): string {
-  return (name || login).toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+  return login.toLowerCase().replace(/[^a-z0-9_]/g, '');
 }

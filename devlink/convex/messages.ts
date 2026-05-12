@@ -39,31 +39,77 @@ export const sendMessage = mutation({
     channelId: v.string(),
     authorId: v.string(),
     content: v.string(),
+    threadId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
+
+    // Parse @mentions from content
+    const mentionRegex = /@([a-z0-9_]+)/gi;
+    const mentionedUsernames = [...new Set(
+      (args.content.match(mentionRegex) || []).map(m => m.slice(1).toLowerCase())
+    )];
+    const mentionedIds: string[] = [];
+    if (mentionedUsernames.length > 0) {
+      for (const username of mentionedUsernames) {
+        const user = await ctx.db
+          .query("users")
+          .withIndex("by_username", (q) => q.eq("username", username))
+          .first();
+        if (user && user._id !== args.authorId) {
+          mentionedIds.push(user._id);
+        }
+      }
+    }
+
+    // Determine the actual channelId (for thread replies, use parent's channelId)
+    let actualChannelId = args.channelId;
+    if (args.threadId) {
+      const parentId = ctx.db.normalizeId("messages", args.threadId);
+      if (parentId) {
+        const parentMessage = await ctx.db.get(parentId);
+        if (parentMessage) {
+          actualChannelId = parentMessage.channelId;
+        }
+      }
+    }
     
     // Create the message
     const messageId = await ctx.db.insert("messages", {
-      channelId: args.channelId,
+      channelId: actualChannelId,
       authorId: args.authorId,
       content: args.content,
       isEdited: false,
       isPinned: false,
       reactions: [],
       replies: 0,
+      threadId: args.threadId,
+      mentions: mentionedIds.length > 0 ? mentionedIds : undefined,
       createdAt: now,
     });
 
+    // If this is a thread reply, increment the parent's reply count
+    if (args.threadId) {
+      const parentId = ctx.db.normalizeId("messages", args.threadId);
+      if (parentId) {
+        const parent = await ctx.db.get(parentId);
+        if (parent) {
+          await ctx.db.patch(parentId, {
+            replies: (parent.replies ?? 0) + 1,
+          });
+        }
+      }
+    }
+
     // Update channel or DM last activity
-    const channelId = ctx.db.normalizeId("channels", args.channelId);
+    const channelId = ctx.db.normalizeId("channels", actualChannelId);
     if (channelId) {
       await ctx.db.patch(channelId, {
         lastActivity: now,
         updatedAt: now,
       });
     } else {
-      const dmId = ctx.db.normalizeId("directMessages", args.channelId);
+      const dmId = ctx.db.normalizeId("directMessages", actualChannelId);
       if (dmId) {
         await ctx.db.patch(dmId, {
           lastActivity: now,

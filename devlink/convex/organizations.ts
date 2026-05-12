@@ -34,6 +34,7 @@ export const createOrganization = mutation({
     name: v.string(),
     slug: v.string(),
     avatar: v.optional(v.string()),
+    creatorId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
@@ -45,6 +46,20 @@ export const createOrganization = mutation({
       createdAt: now,
       updatedAt: now,
     });
+
+    // Auto-create a #general channel for the new org
+    const orgIdStr = orgId.toString();
+    const members = args.creatorId ? [args.creatorId] : [];
+    await ctx.db.insert("channels", {
+      name: "general",
+      type: "public",
+      orgId: orgIdStr,
+      members,
+      lastActivity: now,
+      createdAt: now,
+      updatedAt: now,
+    });
+
     return await ctx.db.get(orgId);
   },
 });

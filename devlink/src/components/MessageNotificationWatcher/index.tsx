@@ -7,7 +7,7 @@ interface Props {
   channelId?: string;
   isActive: boolean;
   name: string;
-  type: 'channel' | 'dm';
+  type: string;
 }
 
 export function MessageNotificationWatcher({ tabId, channelId, isActive, name, type }: Props) {
@@ -41,8 +41,11 @@ export function MessageNotificationWatcher({ tabId, channelId, isActive, name, t
         const label = type === 'dm' ? senderName : `#${name}`;
         const body = type === 'dm' ? preview : `${senderName}: ${preview}`;
 
-        addToast({ type: 'info', message: `[${label}] ${body}` });
+        // Check if current user was mentioned
+        const isMentioned = lastMsg.mentions?.includes(currentUserId);
+        const prefix = isMentioned ? '🔔 @mention: ' : '';
 
+        addToast({ type: isMentioned ? 'warning' : 'info', message: `${prefix}[${label}] ${body}` });
         setTabNotification(tabId);
       }
     }

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useUIStore, getCurrentUser } from '@/lib/store';
 import { useUser, useOrCreateDM, useMessages, useSendMessage, useUsers } from '@/hooks/useData';
 import { Avatar } from '../ui/Avatar';
-import { ArrowLeft, Send, Smile, Bold, Italic, Code, Link2, MoreHorizontal } from 'lucide-react';
+import { ArrowLeft, Send, Smile, Bold, Italic, Code, Link2, MoreHorizontal, MessageSquare, CornerDownRight } from 'lucide-react';
 import { format, isToday, isYesterday, formatDistanceToNow, isSameDay } from 'date-fns';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -18,12 +18,13 @@ export function DMPanel() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const prevDMUserId = useRef<string | null>(null);
 
-  const { selectedDMUserId, setSelectedDMUser, currentUserId, currentOrgId, addToast, openTab, setMessageDraft, clearMessageDraft, messageDrafts, setDMConversation } = useUIStore();
+  const { selectedDMUserId, setSelectedDMUser, currentUserId, currentOrgId, currentOrgName, addToast, openTab, setMessageDraft, clearMessageDraft, messageDrafts, setDMConversation, setSelectedThread } = useUIStore();
   const currentUser = getCurrentUser();
   const { data: otherUser, isLoading: userLoading } = useUser(selectedDMUserId || undefined);
   const { data: allUsers = [] } = useUsers();
   const orCreateDMMutation = useOrCreateDM();
-  const { data: messages = [], isLoading: messagesLoading } = useMessages(conversationId ?? undefined);
+  const { data: rawMessages = [], isLoading: messagesLoading } = useMessages(conversationId ?? undefined);
+  const messages = rawMessages.filter((m: any) => !m.threadId);
   const sendMessageMutation = useSendMessage();
 
   // Initialize DM conversation when DM user changes
@@ -259,7 +260,7 @@ export function DMPanel() {
                     <span className="msg-prompt">
                       <span className="msg-username">{senderName}</span>
                       <span className="msg-at">@</span>
-                      <span className="msg-host">devlink</span>
+                      <span className="msg-host">{currentOrgName}</span>
                       <span className="msg-colon">:</span>
                       <span className="msg-path">~/{otherUserName}</span>
                       <span className="msg-symbol">$</span>
@@ -300,7 +301,26 @@ export function DMPanel() {
                       )}
                       <div className="msg-meta">
                         <span className="msg-time">{formatDistanceToNow(new Date(msg.createdAt), { addSuffix: true })}</span>
+                          <button
+                            className="msg-thread-btn"
+                            onClick={() => setSelectedThread(msg._id)}
+                            title="Reply in thread"
+                          >
+                            <MessageSquare size={12} />
+                            {msg.replies > 0 && <span className="action-btn-count">{msg.replies}</span>}
+                          </button>
                       </div>
+                      {msg.replies > 0 && (
+                        <button
+                          className="thread-preview"
+                          onClick={() => setSelectedThread(msg._id)}
+                          style={{ marginTop: 4 }}
+                        >
+                          <CornerDownRight size={12} />
+                          <span>{msg.replies} {msg.replies === 1 ? 'reply' : 'replies'}</span>
+                          <span className="thread-activity">View thread</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -320,7 +340,7 @@ export function DMPanel() {
         <div className="dm-prompt-line">
           <span className="prompt-user">{currentUser?.name?.split(' ')[0] || 'user'}</span>
           <span className="prompt-at">@</span>
-          <span className="prompt-host">devlink</span>
+          <span className="prompt-host">{currentOrgName}</span>
           <span className="prompt-path">:~/{otherUserName}</span>
           <span className="prompt-symbol">$</span>
           <span className="prompt-cmd"> send --dm</span>

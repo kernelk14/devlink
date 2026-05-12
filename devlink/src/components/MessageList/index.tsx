@@ -5,19 +5,19 @@ import { format, isToday, isYesterday, isSameDay } from 'date-fns';
 import { formatDistanceToNow } from 'date-fns';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Copy, Smile } from 'lucide-react';
+import { Copy, Smile, MessageSquare, CornerDownRight } from 'lucide-react';
 import { CodeBlock } from '@/components/ui/CodeBlock';
 import { Avatar } from '@/components/ui/Avatar';
 
 export function MessageList() {
-  const { selectedChannelId, currentUserId } = useUIStore();
+  const { selectedChannelId, currentUserId, setSelectedThread, currentOrgName } = useUIStore();
   const { data: channels = [] } = useChannels();
   const { data: messages = [], isLoading } = useMessages(selectedChannelId);
   const { data: users = [] } = useUsers();
   const addReactionMutation = useAddReaction();
 
   const channel = channels.find((c: any) => c._id === selectedChannelId);
-  const channelMessages = messages;
+  const channelMessages = messages.filter((m: any) => !m.threadId);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom when new messages arrive
@@ -57,7 +57,7 @@ export function MessageList() {
           <span className="msg-prompt">
             <span className="msg-username">{userName}</span>
             <span className="msg-at">@</span>
-            <span className="msg-host">devlink</span>
+            <span className="msg-host">{currentOrgName}</span>
             <span className="msg-colon">:</span>
             <span className="msg-path">~/{channel?.name || 'general'}</span>
             <span className="msg-symbol">$</span>
@@ -74,9 +74,16 @@ export function MessageList() {
                   const lang = className?.replace('language-', '') || '';
                   return <CodeBlock code={String(children).trimEnd()} lang={lang} />;
                 },
+                strong({ children, ...props }) {
+                  const text = String(children);
+                  if (text.startsWith('@')) {
+                    return <span className="mention">{text}</span>;
+                  }
+                  return <strong {...props}>{children}</strong>;
+                },
               }}
             >
-              {message.content}
+              {message.content.replace(/(?<!\w)@([a-z0-9_]+)/gi, '**@$1**')}
             </ReactMarkdown>
             {message.reactions && message.reactions.length > 0 && (
               <div className="msg-reactions">
@@ -102,6 +109,11 @@ export function MessageList() {
             )}
             <div className="msg-meta">
               <span className="msg-time">{formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}</span>
+              <button className="msg-action-btn" title="Reply in thread"
+                onClick={() => setSelectedThread(message._id)}>
+                <MessageSquare size={11} />
+                {message.replies > 0 && <span className="action-btn-count">{message.replies}</span>}
+              </button>
               <button className="msg-action-btn" title="Copy">
                 <Copy size={11} />
               </button>
@@ -109,6 +121,14 @@ export function MessageList() {
                 <Smile size={11} />
               </button>
             </div>
+            {message.replies > 0 && (
+              <button className="thread-preview"
+                onClick={() => setSelectedThread(message._id)}>
+                <CornerDownRight size={12} />
+                <span>{message.replies} {message.replies === 1 ? 'reply' : 'replies'}</span>
+                <span className="thread-activity">View thread</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -122,7 +142,7 @@ export function MessageList() {
           <div className="msg-empty-line">
             <span className="prompt-user">system</span>
             <span className="prompt-at">@</span>
-            <span className="prompt-host">devlink</span>
+            <span className="prompt-host">{currentOrgName}</span>
             <span className="prompt-symbol">$</span>
             <span className="msg-empty-cmd"> loading...</span>
           </div>
@@ -138,7 +158,7 @@ export function MessageList() {
           <div className="msg-empty-line">
             <span className="prompt-user">system</span>
             <span className="prompt-at">@</span>
-            <span className="prompt-host">devlink</span>
+            <span className="prompt-host">{currentOrgName}</span>
             <span className="prompt-symbol">$</span>
             <span className="msg-empty-cmd"> cat #{channel?.name || 'channel'}</span>
           </div>

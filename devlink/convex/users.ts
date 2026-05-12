@@ -112,6 +112,8 @@ export const updateUser = mutation({
     username: v.optional(v.string()),
     avatar: v.optional(v.string()),
     color: v.optional(v.string()),
+    orgId: v.optional(v.string()),
+    role: v.optional(v.union(v.literal("owner"), v.literal("admin"), v.literal("member"), v.literal("guest"))),
     is_new_user: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
@@ -121,6 +123,25 @@ export const updateUser = mutation({
       ...updates,
       updatedAt: now,
     });
+
+    // If orgId was set, auto-join the #general channel
+    if (args.orgId) {
+      const generalChannel = await ctx.db
+        .query("channels")
+        .withIndex("by_org", (q) => q.eq("orgId", args.orgId!))
+        .filter((q) => q.eq(q.field("name"), "general"))
+        .first();
+      if (generalChannel) {
+        const userIdStr = userId.toString();
+        if (!generalChannel.members.includes(userIdStr)) {
+          await ctx.db.patch(generalChannel._id, {
+            members: [...generalChannel.members, userIdStr],
+            updatedAt: now,
+          });
+        }
+      }
+    }
+
     return await ctx.db.get(userId);
   },
 });

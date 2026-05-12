@@ -72,18 +72,22 @@ export default defineSchema({
     isEdited: v.optional(v.boolean()),
     isPinned: v.optional(v.boolean()),
     threadId: v.optional(v.string()),
+    replyTo: v.optional(v.string()),
+    replyToAuthor: v.optional(v.string()),
     reactions: v.optional(v.array(v.object({
       emoji: v.string(),
       count: v.number(),
       users: v.array(v.string()),
     }))),
     replies: v.optional(v.number()),
+    mentions: v.optional(v.array(v.string())),
     createdAt: v.number(),
     updatedAt: v.optional(v.number()),
   })
     .index("by_channel", ["channelId"])
     .index("by_author", ["authorId"])
-    .index("by_channel_time", ["channelId", "createdAt"]),
+    .index("by_channel_time", ["channelId", "createdAt"])
+    .index("by_thread", ["threadId"]),
 
   threads: defineTable({
     parentMessageId: v.string(),

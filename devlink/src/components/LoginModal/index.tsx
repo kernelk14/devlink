@@ -66,19 +66,11 @@ export function LoginModal({ onClose }: LoginModalProps) {
             const ghUsername = buildGithubUsername(ghUser.name, ghUser.login);
             const loginEmail = primaryEmail || `${ghUsername}@github.local`;
 
-            const firstOrgId = orgs[0]?._id;
-            if (!firstOrgId) {
-              setGhError('No organization found. Please set up an org first.');
-              setGhAuthStep('idle');
-              return;
-            }
-
             const finalUserId = await createUserMutation.mutateAsync({
               name: ghUser.name || ghUser.login,
               username: ghUsername,
               email: loginEmail,
               avatar: ghUser.avatar_url,
-              orgId: firstOrgId,
             });
 
             if (!finalUserId) {
@@ -182,17 +174,10 @@ export function LoginModal({ onClose }: LoginModalProps) {
       }
 
       MOCK_ACCOUNTS.push({ email: email.toLowerCase(), name: username.trim(), password });
-      const firstOrgId = orgs[0]?._id;
-      if (!firstOrgId) {
-        setError('No organization available. Please contact admin.');
-        setIsLoading(false);
-        return;
-      }
       const finalUserId = await createUserMutation.mutateAsync({
         name: username.trim(),
-        username: username.trim().toLowerCase().replace(/\s+/g, ''),
+        username: email.split('@')[0].toLowerCase().replace(/[^a-z0-9_]/g, ''),
         email: email.toLowerCase(),
-        orgId: firstOrgId,
       });
       if (!finalUserId) {
         throw new Error('User creation failed - no ID returned');

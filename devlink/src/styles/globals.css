@@ -684,6 +684,14 @@ input::placeholder, textarea::placeholder {
   margin: 4px 0;
 }
 
+.mention {
+  color: var(--cyan);
+  background: rgba(88, 166, 255, 0.1);
+  padding: 0 4px;
+  border-radius: 3px;
+  font-weight: 600;
+}
+
 .msg-reactions {
   display: flex;
   flex-wrap: wrap;
@@ -827,6 +835,7 @@ input::placeholder, textarea::placeholder {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 4px;
+  position: relative;
 }
 
 .composer-input-wrap:focus-within {
@@ -945,23 +954,44 @@ input::placeholder, textarea::placeholder {
   background: var(--code-bg);
 }
 
-.code-block-numbers {
-  padding: 8px 0 8px 10px;
+.code-block-lines {
+  flex: 1;
+  overflow-x: auto;
+}
+
+.code-block-line {
+  display: flex;
+  min-height: 18px;
+}
+
+.code-block-line-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 36px;
+  padding: 0 10px;
   background: rgba(0,0,0,0.25);
   border-right: 1px solid var(--border);
   color: var(--fg-dim);
-  font-size: 11px;
+  font-size: 12px;
   font-family: var(--font);
-  text-align: right;
   user-select: none;
-  min-width: 36px;
   flex-shrink: 0;
 }
 
-.code-block-numbers span { display: block; line-height: 1.5; }
+.code-block-line-code {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 14px;
+  font-family: var(--font);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--fg);
+  white-space: pre;
+}
 
 .code-block-pre {
-  padding: 8px 14px;
+  padding: 0 14px;
   flex: 1;
   overflow-x: auto;
   white-space: pre;
@@ -1349,22 +1379,6 @@ input::placeholder, textarea::placeholder {
   color: var(--fg);
 }
 
-.thread-composer {
-  border-top: 1px solid var(--border);
-  padding: 8px 12px;
-}
-
-.thread-composer-input {
-  width: 100%;
-  padding: 7px 10px;
-  background: var(--bg-input);
-  border: 1px solid var(--border);
-  color: var(--fg);
-  font-family: var(--font);
-  font-size: 13px;
-}
-.thread-composer-input:focus { border-color: var(--cyan); outline: none; }
-
 /* ── Notification ─────────────────────────────────────────────── */
 .notification-option-desc {
   font-size: 11px;
@@ -1701,23 +1715,63 @@ input::placeholder, textarea::placeholder {
 .thread-reply + .thread-reply { border-top: 1px solid rgba(65,72,104,0.2); }
 .thread-footer {
   border-top: 1px solid var(--border);
-  padding: 12px;
 }
-.thread-composer-input {
-  width: 100%;
-  padding: 8px 10px;
-  background: var(--bg-input);
-  border: 1px solid var(--border);
-  color: var(--fg);
-  font-family: var(--font);
-  font-size: 13px;
-}
-.thread-composer-input:focus { border-color: var(--cyan); outline: none; }
+
 .thread-title {
   display: flex;
   align-items: center;
   gap: 8px;
 }
+
+.thread-preview {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 6px 12px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--accent);
+  transition: all 150ms ease-out;
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+.thread-preview:hover {
+  background: rgba(88, 166, 255, 0.1);
+  border-color: var(--accent);
+}
+.thread-activity {
+  color: var(--text-secondary);
+  margin-left: 2px;
+}
+
+.msg-thread-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  color: var(--fg-dim);
+  transition: all 150ms ease-out;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+}
+.msg-thread-btn:hover {
+  background: var(--bg-elevated);
+  color: var(--accent);
+}
+
+.action-btn-count {
+  font-size: 10px;
+  font-weight: 600;
+  margin-left: 2px;
+}
+
+
 
 /* ── DM Panel ─────────────────────────────────────────────── */
 .dm-avatar-space { width: 28px; flex-shrink: 0; }
@@ -2162,6 +2216,46 @@ input::placeholder, textarea::placeholder {
 
 .qs-btn-secondary:hover {
   background: var(--bg-elevated);
+}
+
+.mention-dropdown {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 -4px 20px rgba(0,0,0,0.3);
+  max-height: 240px;
+  overflow-y: auto;
+  z-index: 100;
+  margin-bottom: 4px;
+}
+
+.mention-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background 100ms;
+}
+
+.mention-item:hover,
+.mention-item.active {
+  background: rgba(88, 166, 255, 0.1);
+}
+
+.mention-item-name {
+  color: var(--cyan);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.mention-item-full {
+  color: var(--fg-muted);
+  font-size: 11px;
 }
 
 @media (max-width: 480px) {

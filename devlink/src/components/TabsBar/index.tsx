@@ -1,5 +1,5 @@
 import { useUIStore } from '@/lib/store';
-import { X, Hash, MessageSquare } from 'lucide-react';
+import { X, Hash, MessageSquare, User } from 'lucide-react';
 
 export function TabsBar() {
   const { openTabs, activeTabId, closeTab, setActiveTab, setSelectedChannel, setSelectedDMUser, tabNotifications } = useUIStore();
@@ -10,7 +10,7 @@ export function TabsBar() {
     setActiveTab(tab.id);
     if (tab.type === 'channel') {
       setSelectedChannel(tab.id);
-    } else {
+    } else if (tab.type === 'dm') {
       setSelectedDMUser(tab.id);
     }
   };
@@ -30,7 +30,7 @@ export function TabsBar() {
             onClick={() => handleTabClick(tab)}
           >
             <span className="tab-icon">
-              {tab.type === 'channel' ? <Hash size={12} /> : <MessageSquare size={12} />}
+              {tab.type === 'channel' ? <Hash size={12} /> : tab.type === 'dm' ? <MessageSquare size={12} /> : <User size={12} />}
             </span>
             <span className="tab-name">{tab.name}</span>
             <button
