@@ -32,6 +32,7 @@ export default defineSchema({
       v.literal("guest")
     )),
     contacts: v.optional(v.array(v.string())),
+    is_new_user: v.optional(v.boolean()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })

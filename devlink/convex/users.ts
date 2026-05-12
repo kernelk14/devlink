@@ -58,6 +58,7 @@ export const createUser = mutation({
     const userId = await ctx.db.insert("users", {
       ...args,
       status: args.status ?? "offline",
+      is_new_user: true,
       createdAt: now,
       updatedAt: now,
     });
@@ -111,6 +112,7 @@ export const updateUser = mutation({
     username: v.optional(v.string()),
     avatar: v.optional(v.string()),
     color: v.optional(v.string()),
+    is_new_user: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const { userId, ...updates } = args;
