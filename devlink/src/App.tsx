@@ -212,11 +212,6 @@ export function App() {
             <span className="dot dot-green" />
           </div>
           <div className="titlebar-title">
-            <Avatar name={currentUser?.name || 'User'} size="xs" status={currentUser?.status || 'online'} />
-            <span className="prompt-user" style={{ fontSize: 12 }}>{currentUser?.name?.split(' ')[0] || 'user'}</span>
-            <span style={{ color: 'var(--fg-dim)' }}>@</span>
-            <span className="prompt-host" style={{ fontSize: 12 }}>devlink</span>
-            <span style={{ color: 'var(--fg-dim)' }}>:</span>
             <span className="prompt-path" style={{ fontSize: 12 }}>~/{activeChannelName}</span>
             <span className="prompt-symbol" style={{ fontSize: 12 }}>$</span>
           </div>
