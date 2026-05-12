@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useUIStore, getCurrentUser } from '@/lib/store';
-import { useChannels, useOrganizations } from '@/hooks/useData';
+import { useChannels, useOrganizations, useUser, useUpdateUser } from '@/hooks/useData';
 import { usePreferences } from '@/lib/hooks';
 import { SearchModal } from '@/components/SearchModal';
 import { LoginModal } from '@/components/LoginModal';
@@ -76,6 +76,8 @@ export function App() {
   const { data: channels = [] } = useChannels(currentOrgId || undefined, currentUserId || undefined);
   const { preferences } = usePreferences();
   const currentUser = getCurrentUser();
+  const { data: currentUserData } = useUser(currentUserId || undefined);
+  const updateUserMutation = useUpdateUser();
 
   const [showSearch, setShowSearch] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -104,12 +106,32 @@ export function App() {
     }
   }, [channels, selectedChannelId, selectedDMUserId, activeTabId, setSelectedChannel, openTab]);
 
+  useEffect(() => {
+    if (isAuthenticated) {
+      if (currentUserData?.is_new_user) {
+        setShowQuickStartGuide(true);
+      } else {
+        setShowQuickStartGuide(false);
+      }
+    }
+  }, [isAuthenticated, currentUserData, setShowQuickStartGuide]);
+
   useSidebarResizer();
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  const handleQuickStartClose = () => {
+    if (currentUserData?.is_new_user) {
+      updateUserMutation.mutate({
+        userId: currentUserData._id,
+        is_new_user: false,
+      });
+    }
+    setShowQuickStartGuide(false);
+  };
 
   const channel = channels.find((c: any) => c._id === selectedChannelId);
   const activeTab = openTabs.find(t => t.id === activeTabId);
@@ -215,7 +237,6 @@ export function App() {
             <span className="prompt-path" style={{ fontSize: 12 }}>~/{activeChannelName}</span>
             <span className="prompt-symbol" style={{ fontSize: 12 }}>$</span>
           </div>
-          <TabsBar />
           <div className="titlebar-actions">
             <button className="titlebar-btn" onClick={() => setShowNotificationSettings(true)} title="Notifications">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -236,6 +257,9 @@ export function App() {
             </button>
           </div>
         </div>
+
+        {/* ── Tabs Section ─── */}
+        <TabsBar />
 
         {/* ── Terminal Body ─── */}
         <div className="terminal-body">
@@ -277,7 +301,7 @@ export function App() {
       {showNotificationSettings && <NotificationSettingsModal onClose={() => setShowNotificationSettings(false)} />}
       {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} />}
       {showUserProfile && <UserProfileModal userId={showUserProfile} onClose={() => setShowUserProfile(null)} />}
-      {showQuickStartGuide && <QuickStartGuide onClose={() => setShowQuickStartGuide(false)} />}
+      {showQuickStartGuide && <QuickStartGuide onClose={handleQuickStartClose} />}
       <ToastContainer />
       {openTabs.map(tab => {
         const convId = tab.type === 'dm' ? dmConversationMap[tab.id] : tab.id;

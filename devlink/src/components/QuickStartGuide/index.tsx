@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useUIStore } from '@/lib/store';
-import { X, ArrowRight, Hash, MessageSquare, Users, Terminal, Send, Search, Settings, Star } from 'lucide-react';
+import { useUIStore, getCurrentUser } from '@/lib/store';
+import { X, ArrowRight, Hash, MessageSquare, Users, Terminal, Send, Search, Star, Sparkles, Keyboard, Settings } from 'lucide-react';
 
 interface QuickStartGuideProps {
   onClose: () => void;
@@ -10,38 +10,105 @@ interface Step {
   title: string;
   content: string;
   icon: React.ReactNode;
+  bullets?: string[];
+  note?: string;
 }
 
 const steps: Step[] = [
   {
     title: 'Welcome to DevLink',
-    content: 'Your team\'s command center. A terminal-style chat for developers.',
-    icon: <Terminal size={24} />,
+    content: 'A terminal-style team workspace designed to keep your conversations fast, focused, and searchable.',
+    icon: <Terminal size={28} />,
+    bullets: [
+      'Command-line inspired chat and collaboration',
+      'Channels, DMs, and tabs for modern workflows',
+    ],
   },
   {
     title: 'Join Channels',
-    content: 'Click on any channel in the sidebar to join the conversation. Channels are organized by topic.',
-    icon: <Hash size={24} />,
+    content: 'Channels are your project rooms. Each one keeps topic-specific discussions together and easy to follow.',
+    icon: <Hash size={28} />,
+    bullets: [
+      'Click a channel in the sidebar to open it',
+      'Keep conversations organized by topic',
+    ],
   },
   {
-    title: 'Start Direct Messages',
-    content: 'Click on any user in the "Direct Messages" section to start a private conversation.',
-    icon: <MessageSquare size={24} />,
+    title: 'Direct Messages',
+    content: 'Quickly message teammates privately without leaving the terminal-style interface.',
+    icon: <MessageSquare size={28} />,
+    bullets: [
+      'Open a DM to chat one-on-one',
+      'DMs appear as tabs for fast switching',
+    ],
   },
   {
     title: 'Tabs & Multitasking',
-    content: 'Open multiple channels/DMs in tabs. Click tabs to switch between them. Close tabs with X when done.',
-    icon: <Star size={24} />,
+    content: 'Keep multiple conversations open at once and switch instantly between channels and DMs.',
+    icon: <Users size={28} />,
+    bullets: [
+      'Open several tabs for your active work',
+      'Close tabs when you’re done to stay focused',
+    ],
   },
   {
-    title: 'Quick Search',
-    content: 'Press Ctrl+K anywhere to search messages, files, and teammates instantly.',
-    icon: <Search size={24} />,
+    title: 'Search Faster',
+    content: 'Ctrl+K opens search from anywhere, so you can find messages, channels, and teammates instantly.',
+    icon: <Search size={28} />,
+    bullets: [
+      'Search across all conversations',
+      'Jump to channels and DMs in seconds',
+    ],
   },
   {
-    title: 'Send Messages',
-    content: 'Type your message and press Enter to send. Use Shift+Enter for new lines.',
-    icon: <Send size={24} />,
+    title: 'Threads & Replies',
+    content: 'Keep discussions focused by replying to specific messages in threads.',
+    icon: <MessageSquare size={28} />,
+    bullets: [
+      'Hover over a message and click Reply',
+      'Threads open in the right panel',
+      'Keep main channel clean while diving deep',
+    ],
+  },
+  {
+    title: 'Add Reactions',
+    content: 'Express yourself quickly with emoji reactions on messages.',
+    icon: <Sparkles size={28} />,
+    bullets: [
+      'Hover over a message to see reaction options',
+      'Click an emoji to add your reaction',
+      'See who reacted by hovering the emoji',
+    ],
+  },
+  {
+    title: 'Keyboard Shortcuts',
+    content: 'Navigate like a pro with keyboard shortcuts designed for speed.',
+    icon: <Keyboard size={28} />,
+    bullets: [
+      'Ctrl+K: Open search',
+      'Ctrl+,: Open settings',
+      '?: Show all shortcuts',
+    ],
+  },
+  {
+    title: 'Customize Your Experience',
+    content: 'Tailor DevLink to your workflow with settings and preferences.',
+    icon: <Settings size={28} />,
+    bullets: [
+      'Click your avatar for user settings',
+      'Configure notifications and themes',
+      'Access help and shortcuts anytime',
+    ],
+  },
+  {
+    title: 'Send Your First Message',
+    content: 'Type your message and press Enter to send. Use Shift+Enter to insert a new line.',
+    icon: <Send size={28} />,
+    bullets: [
+      'Compose with markdown-style formatting',
+      'Use reactions to keep conversations moving',
+    ],
+    note: 'Tip: The guide is available again from Settings > Help.',
   },
 ];
 

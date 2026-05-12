@@ -3,9 +3,10 @@ import { useUIStore, getCurrentUser } from '@/lib/store';
 import { useUser, useOrCreateDM, useMessages, useSendMessage, useUsers } from '@/hooks/useData';
 import { Avatar } from '../ui/Avatar';
 import { ArrowLeft, Send, Smile, Bold, Italic, Code, Link2, MoreHorizontal } from 'lucide-react';
-import { format, isToday, isYesterday } from 'date-fns';
+import { format, isToday, isYesterday, formatDistanceToNow, isSameDay } from 'date-fns';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { CodeBlock } from '@/components/ui/CodeBlock';
 
 const quickEmojis = ['😀', '😂', '😍', '👍', '🎉', '🚀', '💡', '❤️', '🔥', '😎', '🤔', '👏'];
 
@@ -152,19 +153,16 @@ export function DMPanel() {
     }
   };
 
-  const insertFormat = (prefix: string, suffix: string = prefix) => {
-    const textarea = textareaRef.current;
-    if (textarea) {
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const selected = message.substring(start, end);
-      const newContent = message.substring(0, start) + prefix + selected + suffix + message.substring(end);
-      setMessage(newContent);
-      setTimeout(() => {
-        textarea.focus();
-        textarea.setSelectionRange(start + prefix.length, end + prefix.length);
-      }, 0);
-    }
+  const renderDateDivider = (date: Date) => {
+    let label = format(date, 'EEEE, MMMM d, yyyy');
+    if (isToday(date)) label = 'Today';
+    else if (isYesterday(date)) label = 'Yesterday';
+
+    return (
+      <div className="msg-date-divider">
+        <span className="msg-date-line">{'// ─── '}{label}{' ─── //'}</span>
+      </div>
+    );
   };
 
   const formatTime = (date: Date) => {
@@ -204,8 +202,8 @@ export function DMPanel() {
         </button>
       </div>
 
-      <div className="dm-messages" ref={scrollRef}>
-        <div className="dm-messages-inner">
+      <div className="msg-container scroll-area" ref={scrollRef}>
+        <div className="msg-list">
           {isLoading && messages.length === 0 ? (
             <div style={{ padding: 24, textAlign: 'center', color: 'var(--fg-dim)', fontSize: 12 }}>
               <span className="prompt-symbol">$</span>
@@ -241,31 +239,75 @@ export function DMPanel() {
                 </div>
               </div>
             </div>
-          ) : messages.map((msg: any, idx: number) => {
-            const isMine = msg.authorId === currentUserId;
-            const sender = allUsers.find((u: any) => u.id === msg.authorId);
-            const senderName = sender?.name || 'User';
-            const prevMsg = messages[idx - 1];
-            const showAvatar = !prevMsg || prevMsg.authorId !== msg.authorId;
+          ) : (
+            messages.map((msg: any, idx: number) => {
+              const isMine = msg.authorId === currentUserId;
+              const sender = allUsers.find((u: any) => u.id === msg.authorId);
+              const senderName = sender?.name?.split(' ')[0] || 'unknown';
+              const prevMsg = messages[idx - 1];
+              const prevSender = allUsers.find((u: any) => u.id === prevMsg?.authorId);
+              const sameAuthor = prevMsg && prevSender?.name === sender?.name;
+              const needsDivider = !prevMsg || !isSameDay(new Date(prevMsg.createdAt), new Date(msg.createdAt));
 
-            return (
-              <div key={msg._id} className={`dm-message ${isMine ? 'mine' : 'theirs'} ${showAvatar ? '' : 'no-avatar'}`}>
-                {!isMine && showAvatar && (
-                  <Avatar name={senderName} size="sm" />
-                )}
-                {!isMine && !showAvatar && <div className="dm-avatar-space" />}
-                <div className="dm-message-content">
-                  {showAvatar && !isMine && (
-                    <span className="dm-sender-name">{senderName}</span>
-                  )}
-                  <div className="dm-bubble">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+              return (
+                <div key={msg._id} className={`msg-entry ${isMine ? 'msg-own' : ''}`}>
+                  {needsDivider && renderDateDivider(new Date(msg.createdAt))}
+                  <div className="msg-line">
+                    <div className="msg-avatar-col">
+                      <Avatar name={sender?.name || '?'} size="sm" />
+                    </div>
+                    <span className="msg-prompt">
+                      <span className="msg-username">{senderName}</span>
+                      <span className="msg-at">@</span>
+                      <span className="msg-host">devlink</span>
+                      <span className="msg-colon">:</span>
+                      <span className="msg-path">~/{otherUserName}</span>
+                      <span className="msg-symbol">$</span>
+                    </span>
+                    <div className="msg-body">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          code({ className, children, ...props }) {
+                            const isInline = !className;
+                            if (isInline) {
+                              return <code className="inline-code" {...props}>{children}</code>;
+                            }
+                            const lang = className?.replace('language-', '') || '';
+                            return <CodeBlock code={String(children).trimEnd()} lang={lang} />;
+                          },
+                        }}
+                      >
+                        {msg.content}
+                      </ReactMarkdown>
+                      {msg.reactions && msg.reactions.length > 0 && (
+                        <div className="msg-reactions">
+                          {msg.reactions.map((r: any, i: number) => (
+                            <button
+                              key={i}
+                              className="reaction-badge"
+                              onClick={() => {
+                                if (currentUserId) {
+                                  // Add reaction logic would go here
+                                }
+                              }}
+                            >
+                              <span>{r.emoji}</span>
+                              <span className="reaction-count">{r.count}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <div className="msg-meta">
+                        <span className="msg-time">{formatDistanceToNow(new Date(msg.createdAt), { addSuffix: true })}</span>
+                      </div>
+                    </div>
                   </div>
-                  <span className="dm-time">{formatTime(new Date(msg.createdAt))}</span>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
+          <div style={{ height: 1 }} />
         </div>
       </div>
 

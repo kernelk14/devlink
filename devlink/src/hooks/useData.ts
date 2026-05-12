@@ -165,6 +165,35 @@ export function useUpdateUserStatus() {
   });
 }
 
+export function useUpdateUser() {
+  const queryClient = useQueryClient();
+  const updateUserConvex = useConvexMutation(api.users.updateUser);
+
+  return useMutation({
+    mutationFn: async ({ userId, name, username, avatar, color, is_new_user }: {
+      userId: string;
+      name?: string;
+      username?: string;
+      avatar?: string;
+      color?: string;
+      is_new_user?: boolean;
+    }) => {
+      return await updateUserConvex({
+        userId: userId as any,
+        name,
+        username,
+        avatar,
+        color,
+        is_new_user,
+      });
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['users', variables.userId] });
+      queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEY });
+    },
+  });
+}
+
 export function useConnectUser() {
   const queryClient = useQueryClient();
   const sendRequestConvex = useConvexMutation(api.connections.sendRequest);

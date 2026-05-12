@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useUIStore, getCurrentUser } from '@/lib/store';
-import { useChannels, useUsers, useUser, usePendingRequests } from '@/hooks/useData';
+import { useChannels, useUsers, useUser, usePendingRequests, useMyDMs } from '@/hooks/useData';
 import { ChevronDown, Plus, Settings, Users, Hash, Lock, Star, Search, Bell } from 'lucide-react';
 import { CreateChannelModal } from '@/components/CreateChannelModal';
 import { PeopleModal } from '@/components/PeopleModal';
@@ -12,6 +12,7 @@ export function ChannelSidebar() {
   const { data: allUsers = [] } = useUsers();
   const { data: currentUserData } = useUser(currentUserId || undefined);
   const { data: pendingRequests = [] } = usePendingRequests(currentUserId || undefined);
+  const { data: myDMs = [] } = useMyDMs(currentUserId || undefined, currentOrgId || undefined);
   const [showCreateChannel, setShowCreateChannel] = useState(false);
   const [showPeopleModal, setShowPeopleModal] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -28,8 +29,18 @@ export function ChannelSidebar() {
     return a.name.localeCompare(b.name);
   });
 
+  // Get user IDs who have DM conversations with the current user
+  const connectedUserIds = new Set(
+    myDMs.flatMap(dm => dm.participantIds.filter(id => id !== currentUserId))
+  );
+
+  const contactIds = new Set(currentUserData?.contacts || []);
+  const connectionUsers = allUsers.filter(u =>
+    u.id !== currentUserId && contactIds.has(u.id)
+  );
+
   const dmUsers = allUsers.filter(u =>
-    u.id !== currentUserId
+    u.id !== currentUserId && connectedUserIds.has(u.id)
   );
 
   return (
@@ -67,33 +78,36 @@ export function ChannelSidebar() {
         </div>
         <div className="channel-list">
           {sortedChannels.map((channel: any) => {
-            const isActive = selectedChannelId === channel._id;
-            const isStarred = starredChannels.includes(channel._id);
+            const channelId = channel._id || channel.id;
+            if (!channelId) return null; // Skip channels without ID
+            
+            const isActive = selectedChannelId === channelId;
+            const isStarred = starredChannels.includes(channelId);
             return (
               <div
-                key={channel._id}
+                key={channelId}
                 className={`channel-item ${isActive ? 'active' : ''}`}
                 onClick={() => {
-                  setSelectedChannel(channel._id);
-                  openTab({ id: channel._id, type: 'channel', name: channel.name });
+                  setSelectedChannel(channelId);
+                  openTab({ id: channelId, type: 'channel', name: channel.name || 'unknown' });
                 }}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
-                    setSelectedChannel(channel._id);
-                    openTab({ id: channel._id, type: 'channel', name: channel.name });
+                    setSelectedChannel(channelId);
+                    openTab({ id: channelId, type: 'channel', name: channel.name || 'unknown' });
                   }
                 }}
               >
                 <span className="ch-icon">{channel.type === 'private' ? '🔒' : '#'}</span>
-                <span className="ch-name">{channel.name}</span>
+                <span className="ch-name">{channel.name || 'unknown'}</span>
                 {channel.unreadCount && channel.unreadCount > 0 && (
                   <span className="ch-unread">{channel.unreadCount}</span>
                 )}
                 <button
                   className={`ch-star ${isStarred ? 'starred' : ''}`}
-                  onClick={(e) => { e.stopPropagation(); toggleStarredChannel(channel._id); }}
+                  onClick={(e) => { e.stopPropagation(); toggleStarredChannel(channelId); }}
                 >
                   {isStarred ? '★' : '☆'}
                 </button>
@@ -103,31 +117,34 @@ export function ChannelSidebar() {
         </div>
       </div>
 
-      {/* DMs section */}
+      {/* Connections section */}
       <div className="sidebar-section">
         <div className="sidebar-section-header">
-          <span className="section-label">// direct messages</span>
-          <button className="section-btn" onClick={() => setShowPeopleModal(true)} title="New DM">
-            <Plus size={10} />
+          <span className="section-label">// connections</span>
+          <button className="section-btn" onClick={() => setShowPeopleModal(true)} title="New connection">
+            <Users size={10} />
           </button>
         </div>
         <div className="channel-list">
-          {dmUsers.map((user: any) => {
+          {connectionUsers.length > 0 ? connectionUsers.map((user: any) => {
+            const userId = user._id || user.id;
+            if (!userId || userId === currentUserId) return null;
+            
             const statusColor = user.status === 'online' ? 'var(--green)' : user.status === 'away' ? 'var(--yellow)' : 'var(--fg-dim)';
             return (
               <div
-                key={user._id}
+                key={userId}
                 className="channel-item"
                 onClick={() => {
-                  setSelectedDMUser(user._id);
-                  openTab({ id: user._id, type: 'dm', name: user.name });
+                  setSelectedDMUser(userId);
+                  openTab({ id: userId, type: 'dm', name: user.name || 'Unknown' });
                 }}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
-                    setSelectedDMUser(user._id);
-                    openTab({ id: user._id, type: 'dm', name: user.name });
+                    setSelectedDMUser(userId);
+                    openTab({ id: userId, type: 'dm', name: user.name || 'Unknown' });
                   }
                 }}
               >
@@ -145,7 +162,7 @@ export function ChannelSidebar() {
                       fontWeight: 700,
                       color: '#fff',
                     }}>
-                      {user.name.split(' ').map((n: string) => n[0]).join('')}
+                      {(user.name || 'U').split(' ').map((n: string) => n[0]).join('').toUpperCase()}
                     </span>
                     <span style={{
                       position: 'absolute',
@@ -159,7 +176,75 @@ export function ChannelSidebar() {
                     }} />
                   </span>
                 </span>
-                <span className="ch-name">{user.name}</span>
+                <span className="ch-name">{user.name || 'Unknown'}</span>
+              </div>
+            );
+          }) : (
+            <div className="channel-item channel-empty">No connections yet</div>
+          )}
+        </div>
+      </div>
+
+      {/* DMs section */}
+      <div className="sidebar-section">
+        <div className="sidebar-section-header">
+          <span className="section-label">// direct messages</span>
+          <button className="section-btn" onClick={() => setShowPeopleModal(true)} title="New DM">
+            <Plus size={10} />
+          </button>
+        </div>
+        <div className="channel-list">
+          {dmUsers.map((user: any) => {
+            const userId = user._id || user.id;
+            if (!userId || userId === currentUserId) return null;
+            
+            const statusColor = user.status === 'online' ? 'var(--green)' : user.status === 'away' ? 'var(--yellow)' : 'var(--fg-dim)';
+            return (
+              <div
+                key={userId}
+                className="channel-item"
+                onClick={() => {
+                  setSelectedDMUser(userId);
+                  openTab({ id: userId, type: 'dm', name: user.name || 'Unknown' });
+                }}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    setSelectedDMUser(userId);
+                    openTab({ id: userId, type: 'dm', name: user.name || 'Unknown' });
+                  }
+                }}
+              >
+                <span className="ch-icon">
+                  <span style={{ position: 'relative', display: 'inline-flex' }}>
+                    <span style={{
+                      width: 18,
+                      height: 18,
+                      borderRadius: '50%',
+                      background: 'var(--purple)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 8,
+                      fontWeight: 700,
+                      color: '#fff',
+                    }}>
+                      {(user.name || 'U').split(' ').map((n: string) => n[0]).join('').toUpperCase()}
+                    </span>
+                    <span style={{
+                      position: 'absolute',
+                      bottom: -1,
+                      right: -1,
+                      width: 7,
+                      height: 7,
+                      borderRadius: '50%',
+                      background: statusColor,
+                      border: '1px solid var(--bg-panel)',
+                    }} />
+                  </span>
+                </span>
+                <span className="ch-name">{user.name || 'Unknown'}</span>
               </div>
             );
           })}

@@ -45,9 +45,10 @@ export function MessageList() {
     const prevMsg = channelMessages[index - 1];
     const prevUser = users.find((u: any) => u.id === prevMsg?.authorId) as any;
     const sameAuthor = prevMsg && prevUser?.name === user?.name;
+    const isCurrentUser = message.authorId === currentUserId;
 
     return (
-      <div key={message._id} className="msg-entry">
+      <div key={message._id} className={`msg-entry ${isCurrentUser ? 'msg-own' : ''}`}>
         {needsDivider && renderDateDivider(new Date(message.createdAt))}
         <div className="msg-line">
           <div className="msg-avatar-col">

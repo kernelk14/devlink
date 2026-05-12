@@ -41,6 +41,38 @@
   --bg-primary:     var(--bg-main);
   --code-bg:        #0d0f1a;
   --accent:         var(--cyan);
+}
+
+:root[data-theme='light'] {
+  --bg-main:     #f5f7fb;
+  --bg-panel:    #f8fafc;
+  --bg-elevated: #ffffff;
+  --bg-hover:    #e2e8f0;
+  --bg-input:    #ffffff;
+
+  --border:       #cbd5e1;
+  --border-bright: #7aa2ff;
+
+  --fg:           #111827;
+  --fg-muted:     #475569;
+  --fg-dim:       #64748b;
+
+  --cyan:         #0ea5e9;
+  --blue:         #2563eb;
+  --purple:       #7c3aed;
+  --green:        #16a34a;
+  --yellow:       #eab308;
+  --red:          #ef4444;
+  --orange:       #f97316;
+
+  --text-primary:   var(--fg);
+  --text-secondary: var(--fg-muted);
+  --text-tertiary:  var(--fg-dim);
+  --bg-secondary:   var(--bg-panel);
+  --bg-tertiary:    var(--bg-elevated);
+  --bg-primary:     var(--bg-main);
+  --code-bg:        #eef2ff;
+  --accent:         var(--cyan);
 
   --radius: 0;
   --transition: 150ms ease;
@@ -432,7 +464,7 @@ input::placeholder, textarea::placeholder {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 6px 12px;
+  padding: 4px 12px;
   background: var(--bg-elevated);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
@@ -459,15 +491,15 @@ input::placeholder, textarea::placeholder {
 }
 
 .titlebar-btn {
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--fg-dim);
   border: 1px solid transparent;
   transition: all var(--transition);
-  padding: 4px;
+  padding: 2px;
 }
 .titlebar-btn:hover {
   color: var(--fg);
@@ -569,6 +601,11 @@ input::placeholder, textarea::placeholder {
   background: var(--bg-panel);
   margin: 2px 4px;
   border-radius: 4px;
+}
+
+.msg-entry.msg-own {
+  background: rgba(88, 166, 255, 0.08);
+  border-left: 3px solid var(--accent);
 }
 
 .msg-entry:hover {
@@ -1945,6 +1982,8 @@ input::placeholder, textarea::placeholder {
   border: 1px solid transparent;
   border-bottom: none;
   transition: all 0.15s;
+  min-width: 120px;
+  justify-content: center;
 }
 
 .tab-item:hover {
@@ -1973,10 +2012,11 @@ input::placeholder, textarea::placeholder {
 }
 
 .tab-name {
-  max-width: 120px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1;
+  text-align: center;
 }
 
 .tab-close {

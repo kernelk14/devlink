@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useUIStore, getCurrentUser } from '@/lib/store';
 import { usePreferences } from '@/lib/hooks';
-import { X, User, Bell, Palette, Shield, Keyboard, Terminal, LogOut, Trash2 } from 'lucide-react';
+import { X, User, Bell, Palette, Shield, Keyboard, Terminal, LogOut, Trash2, HelpCircle } from 'lucide-react';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -11,14 +11,28 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const { preferences, updatePreferences } = usePreferences();
   const addToast = useUIStore((state) => state.addToast);
   const logout = useUIStore((state) => state.logout);
+  const updateCurrentUser = useUIStore((state) => state.updateCurrentUser);
+  const setShowQuickStartGuide = useUIStore((state) => state.setShowQuickStartGuide);
   const currentUser = getCurrentUser();
   const [activeTab, setActiveTab] = useState('profile');
   const [theme, setTheme] = useState(preferences.theme);
+  const [fontSize, setFontSize] = useState(preferences.fontSize);
+  const [showThreads, setShowThreads] = useState(preferences.showThreads);
+  const [sidebarVisible, setSidebarVisible] = useState(preferences.sidebarVisible);
+  const [notifications, setNotifications] = useState(preferences.notifications);
+  const [securitySettings, setSecuritySettings] = useState(preferences.security);
 
   const [profileName, setProfileName] = useState(currentUser?.name || '');
   const [profileEmail, setProfileEmail] = useState(currentUser?.email || '');
-  const [twoFAEnabled, setTwoFAEnabled] = useState(false);
-  const [githubLinked, setGithubLinked] = useState(false);
+
+  useEffect(() => {
+    setTheme(preferences.theme);
+    setFontSize(preferences.fontSize);
+    setShowThreads(preferences.showThreads);
+    setSidebarVisible(preferences.sidebarVisible);
+    setNotifications(preferences.notifications);
+    setSecuritySettings(preferences.security);
+  }, [preferences]);
 
   const tabs = [
     { id: 'profile', label: 'profile', icon: User },
@@ -26,40 +40,84 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     { id: 'notifications', label: 'notifications', icon: Bell },
     { id: 'keyboard', label: 'keyboard', icon: Keyboard },
     { id: 'security', label: 'security', icon: Shield },
+    { id: 'help', label: 'help', icon: HelpCircle },
   ];
 
   const handleSaveProfile = () => {
+    updateCurrentUser(profileName, profileEmail);
     addToast({ type: 'success', message: 'Profile updated successfully' });
     onClose();
   };
 
   const handleSaveAppearance = () => {
-    updatePreferences({ theme });
+    updatePreferences({ theme, fontSize, showThreads, sidebarVisible });
     addToast({ type: 'success', message: 'Appearance settings saved' });
+    onClose();
+  };
+
+  const handleSaveNotifications = () => {
+    updatePreferences({ notifications });
+    addToast({ type: 'success', message: 'Notification settings saved' });
+    onClose();
+  };
+
+  const handleSaveSecurity = () => {
+    updatePreferences({ security: securitySettings });
+    addToast({ type: 'success', message: 'Security settings saved' });
+    onClose();
   };
 
   const handleChangePassword = () => {
     addToast({ type: 'info', message: 'Password change flow would trigger here' });
   };
 
-  const handleToggle2FA = () => {
-    const newVal = !twoFAEnabled;
-    setTwoFAEnabled(newVal);
-    addToast({
-      type: 'success',
-      message: newVal ? 'Two-factor authentication enabled' : 'Two-factor authentication disabled',
-    });
+  const toggleNotification = (key: keyof typeof notifications) => {
+    setNotifications((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   const handleGithubLink = () => {
-    addToast({ type: 'info', message: 'GitHub OAuth flow would start here (simulated)' });
-    setGithubLinked(true);
+    setSecuritySettings((prev) => ({ ...prev, githubLinked: true }));
     addToast({ type: 'success', message: 'GitHub account linked successfully' });
   };
 
   const handleGithubUnlink = () => {
-    setGithubLinked(false);
+    setSecuritySettings((prev) => ({ ...prev, githubLinked: false }));
     addToast({ type: 'info', message: 'GitHub account unlinked' });
+  };
+
+  const handleToggle2FA = () => {
+    setSecuritySettings((prev) => {
+      const next = { ...prev, twoFAEnabled: !prev.twoFAEnabled };
+      addToast({
+        type: 'success',
+        message: next.twoFAEnabled ? 'Two-factor authentication enabled' : 'Two-factor authentication disabled',
+      });
+      return next;
+    });
+  };
+
+  const handleSave = () => {
+    if (activeTab === 'profile') {
+      handleSaveProfile();
+      return;
+    }
+    if (activeTab === 'appearance') {
+      handleSaveAppearance();
+      return;
+    }
+    if (activeTab === 'notifications') {
+      handleSaveNotifications();
+      return;
+    }
+    if (activeTab === 'security') {
+      handleSaveSecurity();
+      return;
+    }
+    if (activeTab === 'help') {
+      onClose();
+      return;
+    }
+    onClose();
   };
 
   const handleLogout = () => {
@@ -167,6 +225,38 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     </button>
                   </div>
                 </div>
+                <div className="form-group">
+                  <label className="form-label">font size</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <button className="btn btn-secondary btn-sm" onClick={() => setFontSize(Math.max(11, fontSize - 1))}>
+                      -
+                    </button>
+                    <span>{fontSize}px</span>
+                    <button className="btn btn-secondary btn-sm" onClick={() => setFontSize(Math.min(18, fontSize + 1))}>
+                      +
+                    </button>
+                  </div>
+                </div>
+                <div className="permission-row">
+                  <div>
+                    <div style={{ fontWeight: 500 }}>Show sidebar</div>
+                    <div style={{ color: 'var(--fg-muted)', fontSize: 12 }}>Toggle the left sidebar visibility</div>
+                  </div>
+                  <label className="toggle">
+                    <input type="checkbox" checked={sidebarVisible} onChange={() => setSidebarVisible(prev => !prev)} />
+                    <span className="toggle-slider" />
+                  </label>
+                </div>
+                <div className="permission-row">
+                  <div>
+                    <div style={{ fontWeight: 500 }}>Show threads</div>
+                    <div style={{ color: 'var(--fg-muted)', fontSize: 12 }}>Show thread panel when threads are available</div>
+                  </div>
+                  <label className="toggle">
+                    <input type="checkbox" checked={showThreads} onChange={() => setShowThreads(prev => !prev)} />
+                    <span className="toggle-slider" />
+                  </label>
+                </div>
               </div>
             )}
 
@@ -185,7 +275,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       <div style={{ color: 'var(--fg-muted)', fontSize: 12 }}>Show system notifications</div>
                     </div>
                     <label className="toggle">
-                      <input type="checkbox" defaultChecked />
+                      <input type="checkbox" checked={notifications.desktopNotifications} onChange={() => toggleNotification('desktopNotifications')} />
                       <span className="toggle-slider" />
                     </label>
                   </div>
@@ -195,7 +285,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       <div style={{ color: 'var(--fg-muted)', fontSize: 12 }}>Play sound for mentions</div>
                     </div>
                     <label className="toggle">
-                      <input type="checkbox" defaultChecked />
+                      <input type="checkbox" checked={notifications.soundAlerts} onChange={() => toggleNotification('soundAlerts')} />
                       <span className="toggle-slider" />
                     </label>
                   </div>
@@ -205,7 +295,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       <div style={{ color: 'var(--fg-muted)', fontSize: 12 }}>Show message content in notifications</div>
                     </div>
                     <label className="toggle">
-                      <input type="checkbox" defaultChecked />
+                      <input type="checkbox" checked={notifications.messagePreview} onChange={() => toggleNotification('messagePreview')} />
                       <span className="toggle-slider" />
                     </label>
                   </div>
@@ -215,7 +305,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       <div style={{ color: 'var(--fg-muted)', fontSize: 12 }}>Notify on all channel activity</div>
                     </div>
                     <label className="toggle">
-                      <input type="checkbox" />
+                      <input type="checkbox" checked={notifications.channelNotifications} onChange={() => toggleNotification('channelNotifications')} />
                       <span className="toggle-slider" />
                     </label>
                   </div>
@@ -295,18 +385,18 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                         <div>
                           <div style={{ fontSize: 13, fontWeight: 500 }}>GitHub</div>
                           <div style={{ fontSize: 11, color: 'var(--fg-dim)' }}>
-                            {githubLinked ? 'alexthompson-dev' : 'Not connected'}
+                            {securitySettings.githubLinked ? 'alexthompson-dev' : 'Not connected'}
                           </div>
                         </div>
                       </div>
-                      {githubLinked ? (
+                      {securitySettings.githubLinked ? (
                         <button className="btn btn-ghost btn-sm" onClick={handleGithubUnlink} style={{ color: 'var(--red)' }}>
                           unlink
                         </button>
                       ) : (
-<button className="btn btn-secondary btn-sm" onClick={handleGithubLink}>
-                            <span style={{ fontSize: 12 }}>⚙</span>
-                            link
+                        <button className="btn btn-secondary btn-sm" onClick={handleGithubLink}>
+                          <span style={{ fontSize: 12 }}>⚙</span>
+                          link
                         </button>
                       )}
                     </div>
@@ -326,7 +416,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       <div style={{ color: 'var(--fg-muted)', fontSize: 12 }}>Add an extra layer of security</div>
                     </div>
                     <label className="toggle">
-                      <input type="checkbox" checked={twoFAEnabled} onChange={handleToggle2FA} />
+                      <input type="checkbox" checked={securitySettings.twoFAEnabled} onChange={handleToggle2FA} />
                       <span className="toggle-slider" />
                     </label>
                   </div>
@@ -345,14 +435,76 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                 </div>
               </div>
             )}
+
+            {activeTab === 'help' && (
+              <div>
+                <div className="terminal-block" style={{ marginBottom: 20 }}>
+                  <div className="terminal-line">
+                    <span className="prompt-symbol">$</span>
+                    <span style={{ color: 'var(--fg-muted)' }}> help --show</span>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <div style={{ fontWeight: 500, marginBottom: 12, fontSize: 14 }}>// getting started</div>
+                  <div className="terminal-block" style={{ padding: 16, marginBottom: 16 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>Quick Start Guide</div>
+                        <div style={{ fontSize: 12, color: 'var(--fg-dim)' }}>
+                          Learn the basics of DevLink with an interactive guide
+                        </div>
+                      </div>
+                      <button
+                        className="btn btn-primary btn-sm"
+                        onClick={() => {
+                          setShowQuickStartGuide(true);
+                          onClose();
+                        }}
+                      >
+                        <HelpCircle size={14} />
+                        start guide
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <div style={{ fontWeight: 500, marginBottom: 12, fontSize: 14 }}>// resources</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <button className="btn btn-ghost" style={{ justifyContent: 'flex-start' }}>
+                      <Keyboard size={14} />
+                      Keyboard Shortcuts
+                    </button>
+                    <button className="btn btn-ghost" style={{ justifyContent: 'flex-start' }}>
+                      <Terminal size={14} />
+                      Command Reference
+                    </button>
+                    <button className="btn btn-ghost" style={{ justifyContent: 'flex-start' }}>
+                      <HelpCircle size={14} />
+                      FAQ
+                    </button>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <div style={{ fontWeight: 500, marginBottom: 12, fontSize: 14 }}>// support</div>
+                  <div style={{ fontSize: 12, color: 'var(--fg-dim)', lineHeight: 1.6 }}>
+                    Need help? Contact our support team or check out our community forums.
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
         <div className="popup-footer">
           <button className="btn btn-secondary" onClick={onClose}>cancel</button>
-          <button className="btn btn-primary" onClick={activeTab === 'profile' ? handleSaveProfile : activeTab === 'appearance' ? handleSaveAppearance : onClose}>
-            save
-          </button>
+          {activeTab !== 'help' && (
+            <button className="btn btn-primary" onClick={handleSave}>
+              save
+            </button>
+          )}
         </div>
       </div>
     </div>

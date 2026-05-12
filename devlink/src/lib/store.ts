@@ -79,6 +79,7 @@ interface UIState {
   starredChannels: string[];
   toasts: Toast[];
   currentUserId: string;
+  currentUserName: string;
   editingMessage: string | null;
   sidebarCollapsed: boolean;
   failedMessages: FailedMessage[];
@@ -89,6 +90,7 @@ interface UIState {
   setSelectedDMUser: (userId: string | null) => void;
   setSelectedThread: (threadId: string | null) => void;
   setSearchQuery: (query: string) => void;
+  updateCurrentUser: (name: string, email: string) => void;
   toggleThreadPanel: (open?: boolean) => void;
   toggleSearch: (open?: boolean) => void;
   toggleMembers: (open?: boolean) => void;
@@ -136,7 +138,7 @@ interface UIState {
 export const useUIStore = create<UIState>()(
   persist(
     immer((set, get) => ({
-      showQuickStartGuide: true,
+      showQuickStartGuide: false,
       openTabs: [],
       activeTabId: null,
       selectedChannelId: '',
@@ -166,6 +168,7 @@ export const useUIStore = create<UIState>()(
       starredChannels: [],
       toasts: [],
       currentUserId: '',
+      currentUserName: '',
       editingMessage: null,
       sidebarCollapsed: false,
       failedMessages: [],
@@ -266,6 +269,15 @@ export const useUIStore = create<UIState>()(
         state.isAuthenticated = true;
         state.currentEmail = email;
         state.currentUserId = userId;
+        state.currentUserName = email.split('@')[0];
+      }),
+
+      updateCurrentUser: (name, email) => set((state) => {
+        state.currentEmail = email;
+        state.currentUserName = name;
+        if (!state.currentUserId) {
+          state.currentUserId = email;
+        }
       }),
 
       logout: () => set((state) => {
@@ -396,12 +408,19 @@ export const useUIStore = create<UIState>()(
       }),
 
       closeTab: (tabId) => set((state) => {
-        const tab = state.openTabs.find(t => t.id === tabId);
+        const tabIndex = state.openTabs.findIndex(t => t.id === tabId);
+        const tab = state.openTabs[tabIndex];
         state.openTabs = state.openTabs.filter(t => t.id !== tabId);
         delete state.tabNotifications[tabId];
         if (state.activeTabId === tabId) {
           const remaining = state.openTabs;
-          state.activeTabId = remaining.length > 0 ? remaining[remaining.length - 1].id : null;
+          if (remaining.length > 0) {
+            // Switch to the tab before the closed one, or the first tab if it was the first
+            const newIndex = Math.max(0, tabIndex - 1);
+            state.activeTabId = remaining[newIndex]?.id || remaining[0].id;
+          } else {
+            state.activeTabId = null;
+          }
         }
         if (tab?.type === 'dm' && state.selectedDMUserId === tabId) {
           state.selectedDMUserId = null;
@@ -445,6 +464,7 @@ export const useUIStore = create<UIState>()(
         starredChannels: state.starredChannels,
         currentUserStatus: state.currentUserStatus,
         currentUserId: state.currentUserId,
+        currentUserName: state.currentUserName,
         failedMessages: state.failedMessages,
         isOnline: state.isOnline,
         tabNotifications: state.tabNotifications,
@@ -460,7 +480,7 @@ export function getCurrentUserState(): CurrentUser {
   const state = useUIStore.getState();
   return {
     id: state.currentUserId || 'guest',
-    name: state.currentEmail ? state.currentEmail.split('@')[0] : 'Guest',
+    name: state.currentUserName || (state.currentEmail ? state.currentEmail.split('@')[0] : 'Guest'),
     email: state.currentEmail || 'guest@devlink.io',
     color: 'var(--purple)',
     status: state.currentUserStatus,

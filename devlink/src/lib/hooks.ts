@@ -1,9 +1,145 @@
-import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import { useEffect, useMemo, useCallback, useRef, useSyncExternalStore } from 'react';
 import { useUIStore } from './store';
 import { useChannels as useConvexChannels, useUsers as useConvexUsers, useMessages as useConvexMessages } from '../hooks/useData';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const EMPTY_ARRAY: any[] = [];
+
+type NotificationPreferences = {
+  desktopNotifications: boolean;
+  soundAlerts: boolean;
+  messagePreview: boolean;
+  channelNotifications: boolean;
+};
+
+type SecurityPreferences = {
+  twoFAEnabled: boolean;
+  githubLinked: boolean;
+};
+
+type Preferences = {
+  theme: 'dark' | 'light';
+  fontSize: number;
+  showThreads: boolean;
+  sidebarVisible: boolean;
+  notifications: NotificationPreferences;
+  security: SecurityPreferences;
+};
+
+const PREFERENCES_KEY = 'devlink-preferences';
+const defaultPreferences: Preferences = {
+  theme: 'dark',
+  fontSize: 13,
+  showThreads: false,
+  sidebarVisible: true,
+  notifications: {
+    desktopNotifications: true,
+    soundAlerts: true,
+    messagePreview: true,
+    channelNotifications: false,
+  },
+  security: {
+    twoFAEnabled: false,
+    githubLinked: false,
+  },
+};
+
+let preferencesState: Preferences = defaultPreferences;
+const preferenceListeners = new Set<() => void>();
+
+const isBrowser = typeof window !== 'undefined';
+
+function getStoredPreferences(): Preferences {
+  if (!isBrowser) return defaultPreferences;
+  const saved = window.localStorage.getItem(PREFERENCES_KEY);
+  if (!saved) return defaultPreferences;
+
+  try {
+    const parsed = JSON.parse(saved) as Partial<Preferences>;
+    return {
+      ...defaultPreferences,
+      ...parsed,
+      notifications: {
+        ...defaultPreferences.notifications,
+        ...(parsed.notifications || {}),
+      },
+      security: {
+        ...defaultPreferences.security,
+        ...(parsed.security || {}),
+      },
+    };
+  } catch {
+    return defaultPreferences;
+  }
+}
+
+function applyPreferences(preferences: Preferences) {
+  if (!isBrowser) return;
+  document.documentElement.dataset.theme = preferences.theme;
+  document.documentElement.style.setProperty('--font-size', `${preferences.fontSize}px`);
+}
+
+function setPreferencesState(updates: Partial<Preferences> | ((prev: Preferences) => Preferences)) {
+  const nextPreferences = typeof updates === 'function'
+    ? updates(preferencesState)
+    : { ...preferencesState, ...updates };
+
+  preferencesState = {
+    ...preferencesState,
+    ...nextPreferences,
+    notifications: {
+      ...preferencesState.notifications,
+      ...(nextPreferences.notifications || {}),
+    },
+    security: {
+      ...preferencesState.security,
+      ...(nextPreferences.security || {}),
+    },
+  };
+
+  if (isBrowser) {
+    window.localStorage.setItem(PREFERENCES_KEY, JSON.stringify(preferencesState));
+    applyPreferences(preferencesState);
+  }
+
+  preferenceListeners.forEach((listener) => listener());
+}
+
+function subscribe(listener: () => void) {
+  preferenceListeners.add(listener);
+  return () => preferenceListeners.delete(listener);
+}
+
+function getSnapshot() {
+  return preferencesState;
+}
+
+export function usePreferences() {
+  const preferences = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+
+  useEffect(() => {
+    const stored = getStoredPreferences();
+    if (stored !== preferencesState) {
+      preferencesState = stored;
+      applyPreferences(preferencesState);
+      preferenceListeners.forEach((listener) => listener());
+    }
+  }, []);
+
+  const updatePreferences = (updates: Partial<Preferences>) => {
+    setPreferencesState(updates);
+  };
+
+  const toggleSidebar = () => {
+    setPreferencesState((prev) => ({ ...prev, sidebarVisible: !prev.sidebarVisible }));
+  };
+
+  const toggleThreads = () => {
+    setPreferencesState((prev) => ({ ...prev, showThreads: !prev.showThreads }));
+  };
+
+  return { preferences, updatePreferences, toggleSidebar, toggleThreads };
+}
 
 export function useChannels() {
   const currentOrgId = useUIStore((state) => state.currentOrgId);
@@ -49,43 +185,6 @@ export function useUsers() {
   }, [usersData]);
 
   return { users, isLoading, isError };
-}
-
-export function usePreferences() {
-  const [preferences, setPreferences] = useState({
-    theme: 'dark' as 'dark' | 'light',
-    fontSize: 13,
-    showThreads: false,
-    sidebarVisible: true,
-    settings: {},
-  });
-
-  const updatePreferences = (updates: Partial<typeof preferences>) => {
-    setPreferences((prev) => ({ ...prev, ...updates }));
-  };
-
-  const toggleSidebar = () => {
-    setPreferences((prev) => ({ ...prev, sidebarVisible: !prev.sidebarVisible }));
-  };
-
-  const toggleThreads = () => {
-    setPreferences((prev) => ({ ...prev, showThreads: !prev.showThreads }));
-  };
-
-  useEffect(() => {
-    const saved = localStorage.getItem('devlink-preferences');
-    if (saved) {
-      try {
-        setPreferences(JSON.parse(saved));
-      } catch (e) {}
-    }
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem('devlink-preferences', JSON.stringify(preferences));
-  }, [preferences]);
-
-  return { preferences, updatePreferences, toggleSidebar, toggleThreads };
 }
 
 export function useKeyboardShortcuts() {
