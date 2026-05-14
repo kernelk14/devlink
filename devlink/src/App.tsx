@@ -17,6 +17,8 @@ import { DMPanel } from '@/components/DMPanel';
 import { TabsBar } from '@/components/TabsBar';
 import { QuickStartGuide } from '@/components/QuickStartGuide';
 import { OrgSetupModal } from '@/components/OrgSetupModal';
+import { InviteModal } from '@/components/InviteModal';
+import { InviteJoin } from '@/components/InviteJoin';
 import { ToastContainer } from '@/components/ToastContainer';
 import { MessageNotificationWatcher } from '@/components/MessageNotificationWatcher';
 import { Avatar } from '@/components/ui/Avatar';
@@ -74,15 +76,16 @@ function useSidebarResizer() {
 }
 
 export function App() {
-  const { isAuthenticated, selectedChannelId, selectedThreadId, selectedDMUserId, sidebarCollapsed, toggleSidebar, toggleShortcutsModal, switchOrg, currentOrgId, currentOrgName, setSelectedChannel, currentUserId, setSelectedDMUser, openTab, closeTab, activeTabId, openTabs, showQuickStartGuide, setShowQuickStartGuide, dmConversationMap, addToast } = useUIStore();
+  const { isAuthenticated, selectedChannelId, selectedThreadId, selectedDMUserId, sidebarCollapsed, toggleSidebar, toggleShortcutsModal, switchOrg, currentOrgId, currentOrgName, setSelectedChannel, currentUserId, setSelectedDMUser, openTab, closeTab, activeTabId, openTabs, showQuickStartGuide, setShowQuickStartGuide, dmConversationMap, addToast, isSettingsOpen, toggleSettings, isInviteModalOpen, toggleInviteModal } = useUIStore();
   const { data: channels = [] } = useChannels(currentOrgId || undefined, currentUserId || undefined);
   const { preferences } = usePreferences();
   const currentUser = getCurrentUser();
   const { data: currentUserData } = useUser(currentUserId || undefined);
   const updateUserMutation = useUpdateUser();
 
+  const inviteCode = window.location.pathname.startsWith('/join/') ? window.location.pathname.replace('/join/', '') : null;
+
   const [showSearch, setShowSearch] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
   const [showNotificationSettings, setShowNotificationSettings] = useState(false);
   const [showUserProfile, setShowUserProfile] = useState<string | null>(null);
   const [showLogin, setShowLogin] = useState(false);
@@ -91,15 +94,30 @@ export function App() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const { data: orgs } = useOrganizations();
 
-  // Sync the real Convex org ID into the store and auto-select first channel
+  // Initialize store with the user's org
   useEffect(() => {
-    if (orgs && orgs.length > 0) {
-      const firstOrg = orgs[0] as any;
-      if (firstOrg?._id && firstOrg._id !== currentOrgId) {
-        switchOrg(firstOrg._id, firstOrg.name || firstOrg.slug);
+    if (orgs && orgs.length > 0 && currentUserData) {
+      const userOrgId = currentUserData.orgId;
+      if (userOrgId) {
+        const userOrg = orgs.find((o: any) => o._id === userOrgId) as any;
+        if (userOrg) {
+          switchOrg(userOrg._id, userOrg.name || userOrg.slug, userOrg.slug, userOrg.code);
+          if (currentUserData.role) useUIStore.getState().setCurrentUserRole(currentUserData.role);
+          return;
+        }
+      }
+      // Don't auto-assign users without an orgId
+      if (currentUserData.orgId === undefined) return;
+      const isDefault = currentOrgId === 'o1';
+      const stillExists = orgs.some((o: any) => o._id === currentOrgId);
+      if (isDefault || !stillExists) {
+        const firstOrg = orgs[0] as any;
+        if (firstOrg?._id) {
+          switchOrg(firstOrg._id, firstOrg.name || firstOrg.slug, firstOrg.slug, firstOrg.code);
+        }
       }
     }
-  }, [orgs]);
+  }, [orgs, currentUserData]);
 
   useEffect(() => {
     if (channels.length > 0 && !selectedChannelId && !selectedDMUserId && activeTabId === null) {
@@ -120,6 +138,9 @@ export function App() {
       } else {
         setShowOrgSetup(false);
         setShowQuickStartGuide(false);
+      }
+      if (currentUserData.role) {
+        useUIStore.getState().setCurrentUserRole(currentUserData.role);
       }
     }
   }, [isAuthenticated, currentUserData, setShowQuickStartGuide]);
@@ -177,6 +198,10 @@ export function App() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
+
+  if (inviteCode) {
+    return <InviteJoin />;
+  }
 
   if (!isAuthenticated) {
     return (
@@ -261,7 +286,7 @@ export function App() {
                 <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
               </svg>
             </button>
-            <button className="titlebar-btn" onClick={() => setShowSettings(true)} title="Settings">
+            <button className="titlebar-btn" onClick={() => toggleSettings()} title="Settings">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="12" cy="12" r="3"/>
                 <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
@@ -270,8 +295,8 @@ export function App() {
           </div>
         </div>
 
-        {/* ── Tabs Section ─── */}
-        <TabsBar />
+       {/* ── Tabs Section ─── */}
+       <TabsBar channels={channels} />
 
         {/* ── Terminal Body ─── */}
         <div className="terminal-body">
@@ -317,7 +342,8 @@ export function App() {
       </div>
 
       {showSearch && <SearchModal onClose={() => setShowSearch(false)} />}
-      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+      {isSettingsOpen && <SettingsModal onClose={() => toggleSettings(false)} />}
+      {isInviteModalOpen && <InviteModal onClose={() => toggleInviteModal(false)} />}
       {showNotificationSettings && <NotificationSettingsModal onClose={() => setShowNotificationSettings(false)} />}
       {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} />}
       {showUserProfile && <UserProfileModal userId={showUserProfile} onClose={() => setShowUserProfile(null)} />}
@@ -337,7 +363,7 @@ export function App() {
             type={tab.type}
           />
         );
-      })}
+      }      )}
     </div>
   );
 }

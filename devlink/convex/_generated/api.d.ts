@@ -8,10 +8,12 @@
  * @module
  */
 
+import type * as auth from "../auth.js";
 import type * as channels from "../channels.js";
 import type * as connections from "../connections.js";
 import type * as dms from "../dms.js";
 import type * as http from "../http.js";
+import type * as linkPreviews from "../linkPreviews.js";
 import type * as messages from "../messages.js";
 import type * as organizations from "../organizations.js";
 import type * as resetUser from "../resetUser.js";
@@ -26,10 +28,12 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  auth: typeof auth;
   channels: typeof channels;
   connections: typeof connections;
   dms: typeof dms;
   http: typeof http;
+  linkPreviews: typeof linkPreviews;
   messages: typeof messages;
   organizations: typeof organizations;
   resetUser: typeof resetUser;

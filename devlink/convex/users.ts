@@ -119,13 +119,15 @@ export const updateUser = mutation({
   handler: async (ctx, args) => {
     const { userId, ...updates } = args;
     const now = Date.now();
+    const before = await ctx.db.get(userId);
+
     await ctx.db.patch(userId, {
       ...updates,
       updatedAt: now,
     });
 
-    // If orgId was set, auto-join the #general channel
-    if (args.orgId) {
+    // If orgId was set and user didn't already have one, post a join message
+    if (args.orgId && (!before?.orgId || before.orgId !== args.orgId)) {
       const generalChannel = await ctx.db
         .query("channels")
         .withIndex("by_org", (q) => q.eq("orgId", args.orgId!))
@@ -139,12 +141,83 @@ export const updateUser = mutation({
             updatedAt: now,
           });
         }
+        const userName = before?.name || args.name || "Someone";
+        await ctx.db.insert("messages", {
+          channelId: generalChannel._id.toString(),
+          authorId: "system",
+          content: `${userName} has joined the organization.`,
+          isEdited: false,
+          reactions: [],
+          replies: 0,
+          createdAt: now,
+        });
       }
     }
 
     return await ctx.db.get(userId);
   },
 });
+
+export const removeOrgMember = mutation({
+  args: {
+    adminId: v.id("users"),
+    targetUserId: v.id("users"),
+    orgId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const admin = await ctx.db.get(args.adminId);
+    if (!admin || (admin.role !== "owner" && admin.role !== "admin")) {
+      throw new Error("Only owners and admins can remove members");
+    }
+    const now = Date.now();
+
+    // Clear orgId and role on target user
+    await ctx.db.patch(args.targetUserId, {
+      orgId: undefined,
+      role: undefined,
+      updatedAt: now,
+    });
+
+    // Remove from all channels in this org
+    const orgChannels = await ctx.db
+      .query("channels")
+      .withIndex("by_org", (q) => q.eq("orgId", args.orgId))
+      .collect();
+
+    for (const channel of orgChannels) {
+      const userIdStr = args.targetUserId.toString();
+      if (channel.members.includes(userIdStr)) {
+        await ctx.db.patch(channel._id, {
+          members: channel.members.filter((m) => m !== userIdStr),
+          updatedAt: now,
+        });
+      }
+    }
+
+    // Post system message to #general
+    const generalChannel = await ctx.db
+      .query("channels")
+      .withIndex("by_org", (q) => q.eq("orgId", args.orgId))
+      .filter((q) => q.eq(q.field("name"), "general"))
+      .first();
+
+    if (generalChannel) {
+      const targetUser = await ctx.db.get(args.targetUserId);
+      await ctx.db.insert("messages", {
+        channelId: generalChannel._id.toString(),
+        authorId: "system",
+        content: `${targetUser?.name || "A user"} has been removed from the organization.`,
+        isEdited: false,
+        reactions: [],
+        replies: 0,
+        createdAt: now,
+      });
+    }
+
+    return { success: true };
+  },
+});
+
 // Connect with another user
 export const connectUser = mutation({
   args: {

@@ -1,7 +1,22 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useUIStore } from '@/lib/store';
 import { useSendMessage, useUser, useUsers } from '@/hooks/useData';
-import { Paperclip, Bold, Italic, Code, Link2, Smile, Zap, RefreshCw } from 'lucide-react';
+import { Paperclip, Bold, Italic, Code, Link2, Smile, Zap, RefreshCw, Eye, EyeOff } from 'lucide-react';
+
+const urlRegex = /https?:\/\/[^\s<>"']+(?:\/[^\s<>"']*)?/gi;
+
+function extractUrls(text: string): string[] {
+  if (!text.includes('://')) return [];
+  const matches = text.match(urlRegex);
+  if (!matches) return [];
+  const raw = [...new Set(matches.map(u => u.replace(/[.,;!?)]+$/, '')))];
+  return raw.filter(u => { try { new URL(u); return true; } catch { return false; } });
+}
+
+function safeUrlMeta(url: string) {
+  try { const u = new URL(url); return { hostname: u.hostname, ok: true as const }; }
+  catch { return { hostname: url, ok: false as const }; }
+}
 
 export function MessageComposer() {
   const sendMessageMutation = useSendMessage();
@@ -13,10 +28,11 @@ export function MessageComposer() {
   const currentUserId = useUIStore((s) => s.currentUserId);
   const addToast = useUIStore((state) => state.addToast);
   const messageDrafts = useUIStore((s) => s.messageDrafts);
-  const currentOrgName = useUIStore((s) => s.currentOrgName);
+  const currentOrgSlug = useUIStore((s) => s.currentOrgSlug);
   const [message, setMessage] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [showLinkPreviews, setShowLinkPreviews] = useState(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [mentionOpen, setMentionOpen] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
@@ -35,10 +51,11 @@ export function MessageComposer() {
 
   useEffect(() => {
     const textarea = textareaRef.current;
-    if (textarea) {
+    if (!textarea) return;
+    requestAnimationFrame(() => {
       textarea.style.height = 'auto';
       textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
-    }
+    });
   }, [message]);
 
   // Load/save drafts for the current channel
@@ -191,12 +208,17 @@ export function MessageComposer() {
 
   const hasError = sendMessageMutation.isError;
 
+  const detectedUrls = useMemo(
+    () => showLinkPreviews ? extractUrls(message) : [],
+    [message, showLinkPreviews]
+  );
+
   return (
     <div className="composer">
       <div className="composer-prompt-line">
         <span className="prompt-user">{userName}</span>
         <span className="prompt-at">@</span>
-        <span className="prompt-host">{currentOrgName}</span>
+        <span className="prompt-host">{currentOrgSlug}</span>
         <span className="prompt-symbol">$</span>
         <span className="prompt-cmd"> send --msg</span>
       </div>
@@ -214,6 +236,13 @@ export function MessageComposer() {
         <button className="toolbar-btn" title="Link" onClick={() => insertFormat('[', '](url)')}>
           <Link2 size={14} />
         </button>
+        <button
+          className={`toolbar-btn ${showLinkPreviews ? 'toolbar-btn-active' : ''}`}
+          title={showLinkPreviews ? 'Hide link previews' : 'Show link previews'}
+          onClick={() => setShowLinkPreviews(p => !p)}
+        >
+          {showLinkPreviews ? <Eye size={14} /> : <EyeOff size={14} />}
+        </button>
         <span className="toolbar-sep" />
         <button className="toolbar-btn" title="Code block" onClick={() => insertFormat('\n```\n', '\n```\n')}>
           <Zap size={14} />
@@ -228,6 +257,29 @@ export function MessageComposer() {
       </div>
 
       <div className="composer-body">
+        {detectedUrls.length > 0 && (
+          <div className="composer-link-preview">
+            {detectedUrls.slice(0, 1).map((url, i) => {
+              const meta = safeUrlMeta(url);
+              return (
+                <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="composer-link-preview-card">
+                  <div className="clp-body">
+                    <div className="clp-header">
+                      <img
+                        src={`https://www.google.com/s2/favicons?domain=${meta.hostname}&sz=16`}
+                        alt=""
+                        className="clp-favicon"
+                        onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                      />
+                      <span className="clp-domain">{meta.hostname}</span>
+                    </div>
+                    <div className="clp-title">{url.length > 60 ? url.slice(0, 60) + '...' : url}</div>
+                  </div>
+                </a>
+              );
+            })}
+          </div>
+        )}
         <div className="composer-input-wrap">
           <textarea
             ref={textareaRef}

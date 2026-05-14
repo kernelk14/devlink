@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useUIStore } from '@/lib/store';
-import { useMessages, useUsers } from '@/hooks/useData';
+import { useMessages, useUsers, useMarkChannelRead, useMarkDMRead } from '@/hooks/useData';
 
 interface Props {
   tabId: string;
@@ -17,20 +17,20 @@ export function MessageNotificationWatcher({ tabId, channelId, isActive, name, t
   const usersRef = useRef(allUsers);
   usersRef.current = allUsers;
 
-  const { addToast, setTabNotification, currentUserId } = useUIStore();
+  const { addToast, setTabNotification, setActiveTab, setSelectedChannel, setSelectedDMUser, setSelectedThread, currentUserId } = useUIStore();
+  const markChannelRead = useMarkChannelRead();
+  const markDMRead = useMarkDMRead();
 
   useEffect(() => {
     if (!channelId || messages.length === 0) return;
 
     const lastMsg = messages[messages.length - 1];
 
-    // First data load: record the latest message ID as baseline
     if (lastIdRef.current === undefined) {
       lastIdRef.current = lastMsg._id;
       return;
     }
 
-    // Last message ID changed — new message arrived
     if (lastMsg._id !== lastIdRef.current) {
       lastIdRef.current = lastMsg._id;
 
@@ -41,15 +41,30 @@ export function MessageNotificationWatcher({ tabId, channelId, isActive, name, t
         const label = type === 'dm' ? senderName : `#${name}`;
         const body = type === 'dm' ? preview : `${senderName}: ${preview}`;
 
-        // Check if current user was mentioned
         const isMentioned = lastMsg.mentions?.includes(currentUserId);
-        const prefix = isMentioned ? '🔔 @mention: ' : '';
+        const prefix = isMentioned ? '@mention: ' : '';
 
-        addToast({ type: isMentioned ? 'warning' : 'info', message: `${prefix}[${label}] ${body}` });
+        addToast({
+          type: isMentioned ? 'warning' : 'info',
+          message: `${prefix}[${label}] ${body}`,
+          onClick: () => {
+            setActiveTab(tabId);
+            if (type === 'dm') {
+              setSelectedDMUser(tabId);
+              if (channelId) markDMRead.mutate({ dmId: channelId, userId: currentUserId! });
+            } else {
+              setSelectedChannel(tabId);
+              markChannelRead.mutate({ channelId: tabId });
+            }
+            if (lastMsg.threadId) {
+              setSelectedThread(lastMsg.threadId);
+            }
+          },
+        });
         setTabNotification(tabId);
       }
     }
-  }, [messages, channelId, currentUserId, tabId, isActive, name, type, addToast, setTabNotification]);
+  }, [messages, channelId, currentUserId, tabId, isActive, name, type, addToast, setTabNotification, setActiveTab, setSelectedChannel, setSelectedDMUser, setSelectedThread, markChannelRead, markDMRead]);
 
   return null;
 }

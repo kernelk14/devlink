@@ -16,10 +16,14 @@ export function ToastContainer() {
   return (
     <div className="toast-container">
       {toasts.map((toast) => (
-        <div key={toast.id} className={`toast toast-${toast.type}`}>
+        <div
+          key={toast.id}
+          className={`toast toast-${toast.type}${toast.onClick ? ' toast-clickable' : ''}`}
+          onClick={() => { toast.onClick?.(); removeToast(toast.id); }}
+        >
           <span className="toast-icon">{getIcon(toast.type)}</span>
           <span className="toast-message">{toast.message}</span>
-          <button className="toast-close" onClick={() => removeToast(toast.id)}>
+          <button className="toast-close" onClick={(e) => { e.stopPropagation(); removeToast(toast.id); }}>
             <X size={16} />
           </button>
         </div>
@@ -48,7 +52,10 @@ export function ToastContainer() {
           animation: slideIn 200ms ease-out;
           pointer-events: auto;
           max-width: 400px;
+          cursor: default;
         }
+        .toast-clickable { cursor: pointer; }
+        .toast-clickable:hover { border-color: var(--accent); }
         @keyframes slideIn {
           from {
             transform: translateX(100%);

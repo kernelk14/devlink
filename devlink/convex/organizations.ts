@@ -28,11 +28,24 @@ export const getOrganizationBySlug = query({
   },
 });
 
+// Get organization by code
+export const getOrganizationByCode = query({
+  args: { code: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("organizations")
+      .withIndex("by_code", (q) => q.eq("code", args.code))
+      .first();
+  },
+});
+
 // Create a new organization
 export const createOrganization = mutation({
   args: {
     name: v.string(),
     slug: v.string(),
+    code: v.string(),
+    visibility: v.optional(v.union(v.literal("public"), v.literal("private"))),
     avatar: v.optional(v.string()),
     creatorId: v.optional(v.string()),
   },
@@ -41,6 +54,8 @@ export const createOrganization = mutation({
     const orgId = await ctx.db.insert("organizations", {
       name: args.name,
       slug: args.slug,
+      code: args.code,
+      visibility: args.visibility ?? "public",
       avatar: args.avatar,
       memberCount: 1,
       createdAt: now,
@@ -50,7 +65,7 @@ export const createOrganization = mutation({
     // Auto-create a #general channel for the new org
     const orgIdStr = orgId.toString();
     const members = args.creatorId ? [args.creatorId] : [];
-    await ctx.db.insert("channels", {
+    const channelId = await ctx.db.insert("channels", {
       name: "general",
       type: "public",
       orgId: orgIdStr,
@@ -59,6 +74,19 @@ export const createOrganization = mutation({
       createdAt: now,
       updatedAt: now,
     });
+
+    // Welcome message
+    if (args.creatorId) {
+      await ctx.db.insert("messages", {
+        channelId: channelId.toString(),
+        authorId: args.creatorId,
+        content: `Welcome to #general! This is the start of the ${args.name} organization.`,
+        isEdited: false,
+        reactions: [],
+        replies: 0,
+        createdAt: now,
+      });
+    }
 
     return await ctx.db.get(orgId);
   },
@@ -70,6 +98,8 @@ export const updateOrganization = mutation({
     orgId: v.id("organizations"),
     name: v.optional(v.string()),
     slug: v.optional(v.string()),
+    code: v.optional(v.string()),
+    visibility: v.optional(v.union(v.literal("public"), v.literal("private"))),
     avatar: v.optional(v.string()),
   },
   handler: async (ctx, args) => {

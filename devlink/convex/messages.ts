@@ -104,15 +104,24 @@ export const sendMessage = mutation({
     // Update channel or DM last activity
     const channelId = ctx.db.normalizeId("channels", actualChannelId);
     if (channelId) {
+      const channel = await ctx.db.get(channelId);
+      const members = channel?.members || [];
+      const unread = members.filter(memberId => memberId !== args.authorId);
       await ctx.db.patch(channelId, {
         lastActivity: now,
         updatedAt: now,
+        unread: unread,
+        unreadCount: unread.length,
       });
     } else {
       const dmId = ctx.db.normalizeId("directMessages", actualChannelId);
       if (dmId) {
+        const dm = await ctx.db.get(dmId);
+        const participants = dm?.participantIds || [];
+        const unread = participants.filter(participantId => participantId !== args.authorId);
         await ctx.db.patch(dmId, {
           lastActivity: now,
+          unread: unread,
         });
       }
     }

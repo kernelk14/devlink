@@ -1,23 +1,45 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useUIStore, getCurrentUser } from '@/lib/store';
-import { useChannels, useUsers, useUser, usePendingRequests, useMyDMs } from '@/hooks/useData';
-import { ChevronDown, Plus, Settings, Users, Hash, Lock, Star, Search, Bell } from 'lucide-react';
+import { useChannels, useUsers, useUser, usePendingRequests, useMyDMs, useMarkChannelRead, useMarkDMRead } from '@/hooks/useData';
+import { ChevronDown, Plus, Settings, Users, Hash, Lock, Star, Search, Bell, Building2 } from 'lucide-react';
 import { CreateChannelModal } from '@/components/CreateChannelModal';
 import { PeopleModal } from '@/components/PeopleModal';
 import { NotificationsModal } from '@/components/NotificationsModal';
+import { OrgSettingsModal } from '@/components/OrgSettingsModal';
+import { ManageOrganizationsModal } from '@/components/ManageOrganizationsModal';
 
 export function ChannelSidebar() {
-  const { selectedChannelId, setSelectedChannel, starredChannels, toggleStarredChannel, setSelectedDMUser, currentOrgId, currentOrgName, currentUserId, openTab, setActiveTab, openTabs } = useUIStore();
+  const { selectedChannelId, setSelectedChannel, starredChannels, toggleStarredChannel, setSelectedDMUser, currentOrgId, currentOrgName, currentOrgCode, currentUserId, openTab, setActiveTab, openTabs, toggleSettings, toggleInviteModal } = useUIStore();
   const { data: channels = [], isLoading, isError } = useChannels(currentOrgId || undefined, currentUserId || undefined);
   const { data: allUsers = [] } = useUsers();
   const { data: currentUserData } = useUser(currentUserId || undefined);
   const { data: pendingRequests = [] } = usePendingRequests(currentUserId || undefined);
-  const { data: myDMs = [] } = useMyDMs(currentUserId || undefined, currentOrgId || undefined);
-  const [showCreateChannel, setShowCreateChannel] = useState(false);
-  const [showPeopleModal, setShowPeopleModal] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
+const { data: myDMs = [] } = useMyDMs(currentUserId || undefined, currentOrgId || undefined);
+   const [showCreateChannel, setShowCreateChannel] = useState(false);
+   const [showPeopleModal, setShowPeopleModal] = useState(false);
+   const [showNotifications, setShowNotifications] = useState(false);
+   const [showWorkspaceMenu, setShowWorkspaceMenu] = useState(false);
+   const [showOrgSettings, setShowOrgSettings] = useState(false);
+   const [showManageOrgs, setShowManageOrgs] = useState(false);
+   const markChannelRead = useMarkChannelRead();
+  const markDMRead = useMarkDMRead();
+  const workspaceRef = useRef<HTMLDivElement>(null);
+
+  // Close workspace menu on outside click
+  useEffect(() => {
+    if (!showWorkspaceMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (workspaceRef.current && !workspaceRef.current.contains(e.target as Node)) {
+        setShowWorkspaceMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showWorkspaceMenu]);
   
   const currentUser = currentUserData || getCurrentUser();
+  const currentUserRole = useUIStore((s) => s.currentUserRole);
+  const isAdmin = currentUserRole === 'owner' || currentUserRole === 'admin';
 
   const sortedChannels = [...channels].sort((a, b) => {
     const idA = a._id || a.id;
@@ -55,10 +77,43 @@ export function ChannelSidebar() {
         <div className="stb-title">
           <span style={{ color: 'var(--fg-dim)' }}>#</span>
           <span style={{ fontSize: 12 }}>{currentOrgName}</span>
+          {currentOrgCode && <span style={{ color: 'var(--accent)', fontSize: 10, marginLeft: 4, opacity: 0.7, fontFamily: 'monospace', fontWeight: 600 }}>{currentOrgCode}</span>}
         </div>
-        <button className="stb-btn" title="Workspace options">
-          <ChevronDown size={12} />
-        </button>
+        <div ref={workspaceRef} style={{ position: 'relative', marginLeft: 'auto' }}>
+          <button className="stb-btn" style={{ marginLeft: 0 }} title="Workspace options" onClick={() => setShowWorkspaceMenu(!showWorkspaceMenu)}>
+            <ChevronDown size={12} />
+          </button>
+          {showWorkspaceMenu && (
+            <div className="workspace-dropdown">
+              <div className="workspace-dropdown-item" onClick={() => { setShowManageOrgs(true); setShowWorkspaceMenu(false); }}>
+                <Building2 size={14} />
+                Manage Organizations
+              </div>
+              <div className="workspace-dropdown-divider" />
+              {isAdmin && (
+                <div className="workspace-dropdown-item" onClick={() => { setShowCreateChannel(true); setShowWorkspaceMenu(false); }}>
+                  <Plus size={14} />
+                  Create Channel
+                </div>
+              )}
+              <div className="workspace-dropdown-item" onClick={() => { setShowPeopleModal(true); setShowWorkspaceMenu(false); }}>
+                <Users size={14} />
+                View Members
+              </div>
+              <div className="workspace-dropdown-divider" />
+              <div className="workspace-dropdown-item" onClick={() => { toggleInviteModal(); setShowWorkspaceMenu(false); }}>
+                <Plus size={14} />
+                Invite People
+              </div>
+              {isAdmin && (
+                <div className="workspace-dropdown-item" onClick={() => { setShowOrgSettings(true); setShowWorkspaceMenu(false); }}>
+                  <Settings size={14} />
+                  Organization Settings
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Terminal prompt line */}
@@ -79,17 +134,20 @@ export function ChannelSidebar() {
         <div className="channel-list">
           {sortedChannels.map((channel: any) => {
             const channelId = channel._id || channel.id;
-            if (!channelId) return null; // Skip channels without ID
+            if (!channelId) return null;
             
             const isActive = selectedChannelId === channelId;
             const isStarred = starredChannels.includes(channelId);
+            const hasUnread = channel.unread?.includes(currentUserId) || false;
+            const unreadCount = channel.unreadCount || 0;
             return (
               <div
                 key={channelId}
-                className={`channel-item ${isActive ? 'active' : ''}`}
+                className={`channel-item ${isActive ? 'active' : ''}${hasUnread ? ' has-unread' : ''}`}
                 onClick={() => {
                   setSelectedChannel(channelId);
                   openTab({ id: channelId, type: 'channel', name: channel.name || 'unknown' });
+                  if (hasUnread) markChannelRead.mutate({ channelId });
                 }}
                 role="button"
                 tabIndex={0}
@@ -97,13 +155,14 @@ export function ChannelSidebar() {
                   if (e.key === 'Enter') {
                     setSelectedChannel(channelId);
                     openTab({ id: channelId, type: 'channel', name: channel.name || 'unknown' });
+                    if (hasUnread) markChannelRead.mutate({ channelId });
                   }
                 }}
               >
                 <span className="ch-icon">{channel.type === 'private' ? '🔒' : '#'}</span>
-                <span className="ch-name">{channel.name || 'unknown'}</span>
-                {channel.unreadCount && channel.unreadCount > 0 && (
-                  <span className="ch-unread">{channel.unreadCount}</span>
+                <span className="ch-name" style={hasUnread ? { fontWeight: 700, color: 'var(--fg)' } : undefined}>{channel.name || 'unknown'}</span>
+                {hasUnread && unreadCount > 0 && (
+                  <span className="ch-unread-count">{unreadCount}</span>
                 )}
                 <button
                   className={`ch-star ${isStarred ? 'starred' : ''}`}
@@ -207,13 +266,21 @@ export function ChannelSidebar() {
             if (!userId || userId === currentUserId) return null;
             
             const statusColor = user.status === 'online' ? 'var(--green)' : user.status === 'away' ? 'var(--yellow)' : 'var(--fg-dim)';
+            const dm = myDMs.find((d: any) =>
+              d.participantIds.includes(userId) && d.participantIds.includes(currentUserId)
+            );
+            const hasUnread = dm?.unread?.includes(currentUserId);
+
             return (
               <div
                 key={userId}
-                className="channel-item"
+                className={`channel-item${hasUnread ? ' has-unread' : ''}`}
                 onClick={() => {
                   setSelectedDMUser(userId);
                   openTab({ id: userId, type: 'dm', name: user.username });
+                  if (dm && hasUnread) {
+                    markDMRead.mutate({ dmId: dm._id, userId: currentUserId! });
+                  }
                 }}
                 role="button"
                 tabIndex={0}
@@ -221,6 +288,9 @@ export function ChannelSidebar() {
                   if (e.key === 'Enter') {
                     setSelectedDMUser(userId);
                     openTab({ id: userId, type: 'dm', name: user.username });
+                    if (dm && hasUnread) {
+                      markDMRead.mutate({ dmId: dm._id, userId: currentUserId! });
+                    }
                   }
                 }}
               >
@@ -250,9 +320,14 @@ export function ChannelSidebar() {
                       background: statusColor,
                       border: '1px solid var(--bg-panel)',
                     }} />
+                    {hasUnread && (
+                      <span className="ch-unread-dot" />
+                    )}
                   </span>
                 </span>
-                <span className="ch-name">{user.name} ({user.username})</span>
+                <span className="ch-name" style={hasUnread ? { fontWeight: 700, color: 'var(--fg)' } : undefined}>
+                  {user.name} ({user.username})
+                </span>
               </div>
             );
           })}
@@ -292,7 +367,7 @@ export function ChannelSidebar() {
             }} />
           )}
         </button>
-        <button className="sidebar-settings-btn" onClick={() => {}} title="Settings">
+        <button className="sidebar-settings-btn" onClick={() => toggleSettings()} title="Settings">
           <Settings size={12} />
         </button>
       </div>
@@ -306,6 +381,12 @@ export function ChannelSidebar() {
       {showNotifications && (
         <NotificationsModal onClose={() => setShowNotifications(false)} />
       )}
-    </div>
-  );
+{showOrgSettings && (
+         <OrgSettingsModal onClose={() => setShowOrgSettings(false)} />
+       )}
+       {showManageOrgs && (
+         <ManageOrganizationsModal onClose={() => setShowManageOrgs(false)} />
+       )}
+     </div>
+   );
 }

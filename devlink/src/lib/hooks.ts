@@ -18,7 +18,10 @@ type SecurityPreferences = {
 };
 
 type Preferences = {
-  theme: 'dark' | 'light';
+  theme: 'dark' | 'light' | 'catppuccin' | 'kanagawa' | 'rose-pine' | 'everforest'
+       | 'gruvbox' | 'nord' | 'dracula' | 'monokai-pro'
+       | 'nightfox' | 'oxocarbon' | 'github' | 'sonokai' | 'onedark'
+        | 'ayu' | 'cyberdream' | 'material' | 'gruber-darker';
   fontSize: number;
   showThreads: boolean;
   sidebarVisible: boolean;

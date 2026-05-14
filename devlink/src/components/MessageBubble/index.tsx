@@ -7,6 +7,7 @@ import { useUIStore } from '../../lib/store';
 import type { Message, User } from '../../types';
 import { Smile, MessageSquare, MoreHorizontal, CornerDownRight } from 'lucide-react';
 import { CodeBlock } from '@/components/ui/CodeBlock';
+import { useLinkPreviews, LinkPreviewCard } from '@/components/LinkPreview';
 
 interface MessageBubbleProps {
   message: Message;
@@ -77,6 +78,7 @@ export function MessageBubble({ message, author, isFirst, isLast, groupStart }: 
           >
             {message.content.replace(/(?<!\w)@([a-z0-9_]+)/gi, '**@$1**')}
           </ReactMarkdown>
+          <LinkPreviews content={message.content} />
         </div>
 
         {message.reactions.length > 0 && (
@@ -335,6 +337,60 @@ export function MessageBubble({ message, author, isFirst, isLast, groupStart }: 
         @keyframes fadeIn {
           from { opacity: 0; transform: translateY(-50%) translateY(4px); }
           to { opacity: 1; transform: translateY(-50%) translateY(0); }
+        }
+        .link-preview-list {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          margin-top: 8px;
+        }
+        .link-preview {
+          display: flex;
+          flex-direction: column;
+          border: 1px solid var(--border);
+          border-radius: 8px;
+          overflow: hidden;
+          text-decoration: none;
+          transition: border-color 150ms;
+          max-width: 480px;
+        }
+        .link-preview:hover {
+          border-color: var(--accent);
+        }
+        .link-preview-image {
+          width: 100%;
+          max-height: 200px;
+          overflow: hidden;
+          background: var(--bg-tertiary);
+        }
+        .link-preview-image img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+        .link-preview-body {
+          padding: 10px 14px;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+        .link-preview-favicon {
+          width: 16px;
+          height: 16px;
+        }
+        .link-preview-title {
+          font-size: 14px;
+          font-weight: 600;
+          color: var(--accent);
+        }
+        .link-preview-desc {
+          font-size: 12px;
+          color: var(--fg-muted);
+          line-height: 1.4;
+        }
+        .link-preview-url {
+          font-size: 11px;
+          color: var(--fg-dim);
         }
       `}</style>
     </div>

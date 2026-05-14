@@ -33,6 +33,8 @@ export default defineSchema({
     )),
     contacts: v.optional(v.array(v.string())),
     is_new_user: v.optional(v.boolean()),
+    passwordHash: v.optional(v.string()),
+    salt: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -40,15 +42,21 @@ export default defineSchema({
     .index("by_username", ["username"])
     .index("by_org", ["orgId"]),
 
-  organizations: defineTable({
-    name: v.string(),
-    slug: v.string(),
-    avatar: v.optional(v.string()),
-    memberCount: v.number(),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  })
-    .index("by_slug", ["slug"]),
+   organizations: defineTable({
+     name: v.string(),
+     slug: v.string(),
+     code: v.optional(v.string()),
+     visibility: v.optional(v.union(v.literal("public"), v.literal("private"))),
+     avatar: v.optional(v.string()),
+     description: v.optional(v.string()),
+     website: v.optional(v.string()),
+     tags: v.optional(v.array(v.string())),
+     memberCount: v.number(),
+     createdAt: v.number(),
+     updatedAt: v.number(),
+   })
+    .index("by_slug", ["slug"])
+    .index("by_code", ["code"]),
 
   channels: defineTable({
     name: v.string(),
@@ -56,6 +64,7 @@ export default defineSchema({
     description: v.optional(v.string()),
     orgId: v.string(),
     members: v.array(v.string()),
+    unread: v.optional(v.array(v.string())),
     unreadCount: v.optional(v.number()),
     pinnedCount: v.optional(v.number()),
     lastActivity: v.optional(v.number()),
@@ -104,6 +113,7 @@ export default defineSchema({
     orgId: v.string(),
     lastMessageId: v.optional(v.string()),
     lastActivity: v.number(),
+    unread: v.optional(v.array(v.string())),
     createdAt: v.number(),
   })
     .index("by_participants", ["participantIds"])

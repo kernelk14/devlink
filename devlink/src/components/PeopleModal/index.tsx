@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useUIStore } from '@/lib/store';
-import { useUsers, useUser, useConnectUser } from '@/hooks/useData';
-import { X, Search, UserPlus, UserCheck, MessageSquare, Terminal } from 'lucide-react';
+import { useUsers, useUser, useConnectUser, useRemoveOrgMember } from '@/hooks/useData';
+import { X, Search, UserPlus, UserCheck, MessageSquare, Terminal, UserX } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
 
 interface PeopleModalProps {
@@ -10,16 +10,23 @@ interface PeopleModalProps {
 
 export function PeopleModal({ onClose }: PeopleModalProps) {
   const [query, setQuery] = useState('');
-  const { currentUserId, setSelectedDMUser, addToast } = useUIStore();
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+  const { currentUserId, currentOrgId, currentUserRole, setSelectedDMUser, addToast } = useUIStore();
   const { data: users = [] } = useUsers();
   const { data: currentUserData } = useUser(currentUserId || undefined);
   const connectUserMutation = useConnectUser();
+  const removeMemberMutation = useRemoveOrgMember();
 
-  const filteredUsers = users.filter(u => {
-    if (u._id === currentUserId) return false;
+  const orgMembers = users.filter(u => {
+    return u.orgId && currentOrgId && u.orgId === currentOrgId;
+  });
+
+  const filteredUsers = orgMembers.filter(u => {
     const searchStr = (u.name + u.email + u.username).toLowerCase();
     return searchStr.includes(query.toLowerCase());
   });
+
+  const isAdmin = currentUserRole === 'owner' || currentUserRole === 'admin';
 
   const handleConnect = async (userId: string, name: string) => {
     if (!currentUserId) return;
@@ -40,13 +47,36 @@ export function PeopleModal({ onClose }: PeopleModalProps) {
     onClose();
   };
 
+  const handleRemove = async (targetUserId: string) => {
+    if (!currentUserId || !currentOrgId) return;
+    try {
+      await removeMemberMutation.mutateAsync({
+        adminId: currentUserId,
+        targetUserId,
+        orgId: currentOrgId,
+      });
+      addToast({ type: 'success', message: 'Member removed' });
+      setConfirmRemove(null);
+    } catch (err: any) {
+      addToast({ type: 'error', message: err.message || 'Failed to remove member' });
+    }
+  };
+
+  const roleColor = (role?: string) => {
+    switch (role) {
+      case 'owner': return 'var(--yellow)';
+      case 'admin': return 'var(--cyan)';
+      default: return 'var(--fg-dim)';
+    }
+  };
+
   return (
     <div className="popup-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="popup-panel" style={{ width: 500, maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
         <div className="popup-header">
           <div className="popup-title">
             <Terminal size={16} style={{ color: 'var(--cyan)' }} />
-            <span>directory</span>
+            <span>members</span>
             <span style={{ color: 'var(--fg-dim)', fontWeight: 400, fontSize: 12 }}>// find people</span>
           </div>
           <button className="popup-close" onClick={onClose}>
@@ -85,30 +115,65 @@ export function PeopleModal({ onClose }: PeopleModalProps) {
             </div>
           ) : (
             filteredUsers.map((user: any) => {
+              const isMe = user._id === currentUserId;
               const isContact = currentUserData?.contacts?.includes(user._id);
+              const canRemove = isAdmin && !isMe && user.role !== 'owner';
               return (
                 <div key={user._id} className="search-result" style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
                   <Avatar name={user.name} size="md" status={user.status} />
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 600, color: 'var(--fg)', fontSize: 13 }}>{user.name}</div>
+                    <div style={{ fontWeight: 600, color: 'var(--fg)', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {user.name}
+                      {isMe && <span style={{ color: 'var(--fg-dim)', fontSize: 11 }}>(you)</span>}
+                      {user.role && (
+                        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.5px', color: roleColor(user.role), opacity: 0.8 }}>{user.role}</span>
+                      )}
+                    </div>
                     <div style={{ fontSize: 11, color: 'var(--fg-dim)' }}>{user.email}</div>
                   </div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button 
-                      className="btn btn-ghost btn-icon" 
-                      title="Send Message"
-                      onClick={() => handleMessage(user._id)}
-                    >
-                      <MessageSquare size={14} />
-                    </button>
-                    <button 
-                      className={`btn btn-icon ${isContact ? 'btn-ghost' : 'btn-secondary'}`}
-                      title={isContact ? 'Connected' : 'Connect'}
-                      onClick={() => handleConnect(user._id, user.name)}
-                      disabled={isContact || connectUserMutation.isPending}
-                    >
-                      {isContact ? <UserCheck size={14} style={{ color: 'var(--green)' }} /> : <UserPlus size={14} />}
-                    </button>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    {confirmRemove === user._id ? (
+                      <>
+                        <button className="btn btn-danger btn-sm" onClick={() => handleRemove(user._id)} style={{ fontSize: 11, padding: '4px 8px' }}>
+                          Confirm
+                        </button>
+                        <button className="btn btn-ghost btn-sm" onClick={() => setConfirmRemove(null)} style={{ fontSize: 11, padding: '4px 8px' }}>
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        {!isMe && (
+                          <button 
+                            className="btn btn-ghost btn-icon" 
+                            title="Send Message"
+                            onClick={() => handleMessage(user._id)}
+                          >
+                            <MessageSquare size={14} />
+                          </button>
+                        )}
+                        {!isMe && (
+                          <button 
+                            className={`btn btn-icon ${isContact ? 'btn-ghost' : 'btn-secondary'}`}
+                            title={isContact ? 'Connected' : 'Connect'}
+                            onClick={() => handleConnect(user._id, user.name)}
+                            disabled={isContact || connectUserMutation.isPending}
+                          >
+                            {isContact ? <UserCheck size={14} style={{ color: 'var(--green)' }} /> : <UserPlus size={14} />}
+                          </button>
+                        )}
+                        {canRemove && (
+                          <button 
+                            className="btn btn-ghost btn-icon" 
+                            title="Remove from organization"
+                            onClick={() => setConfirmRemove(user._id)}
+                            style={{ color: 'var(--red)', opacity: 0.6 }}
+                          >
+                            <UserX size={14} />
+                          </button>
+                        )}
+                      </>
+                    )}
                   </div>
                 </div>
               );
@@ -117,7 +182,7 @@ export function PeopleModal({ onClose }: PeopleModalProps) {
         </div>
         
         <div className="popup-footer">
-          <span className="prompt-comment" style={{ fontSize: 11 }}>Total members: {users.length}</span>
+          <span className="prompt-comment" style={{ fontSize: 11 }}>Total members: {orgMembers.length}</span>
         </div>
       </div>
     </div>

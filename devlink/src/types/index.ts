@@ -58,6 +58,8 @@ export interface Organization {
   id: string;
   name: string;
   slug: string;
+  code: string;
+  visibility?: 'public' | 'private';
   avatar?: string;
   role: 'owner' | 'admin' | 'member' | 'guest';
   memberCount: number;

@@ -67,3 +67,20 @@ export const getDMsByOrg = query({
       .collect();
   },
 });
+
+export const markDMRead = mutation({
+  args: {
+    dmId: v.id("directMessages"),
+    userId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const dm = await ctx.db.get(args.dmId);
+    if (!dm) return;
+    const unread = dm.unread || [];
+    if (unread.includes(args.userId)) {
+      await ctx.db.patch(args.dmId, {
+        unread: unread.filter((id) => id !== args.userId),
+      });
+    }
+  },
+});

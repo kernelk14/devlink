@@ -15,6 +15,7 @@ export interface Toast {
   type: 'success' | 'error' | 'info' | 'warning';
   message: string;
   duration?: number;
+  onClick?: () => void;
 }
 
 export interface Channel {
@@ -73,6 +74,8 @@ interface UIState {
   currentEmail: string;
   currentOrgId: string;
   currentOrgName: string;
+  currentOrgSlug: string;
+  currentOrgCode: string;
   currentUserStatus: UserStatus;
   unreadChannels: string[];
   typingUsers: Record<string, string[]>;
@@ -109,7 +112,8 @@ interface UIState {
   clearHighlight: () => void;
   login: (email: string, userId: string) => void;
   logout: () => void;
-  switchOrg: (orgId: string, orgName?: string) => void;
+  switchOrg: (orgId: string, orgName?: string, orgSlug?: string, orgCode?: string) => void;
+  setCurrentUserRole: (role: string) => void;
   setCurrentUserStatus: (status: UserStatus) => void;
   markChannelRead: (channelId: string) => void;
   markChannelUnread: (channelId: string) => void;
@@ -163,6 +167,9 @@ export const useUIStore = create<UIState>()(
       currentEmail: '',
       currentOrgId: 'o1',
       currentOrgName: 'devlink',
+      currentOrgSlug: 'devlink',
+      currentOrgCode: 'IOBR-IAS-24WV',
+      currentUserRole: 'member' as string,
       currentUserStatus: 'online' as UserStatus,
       unreadChannels: [],
       typingUsers: {},
@@ -293,10 +300,22 @@ export const useUIStore = create<UIState>()(
         state.isOnline = false;
       }),
 
-      switchOrg: (orgId, orgName) => set((state) => {
+      switchOrg: (orgId, orgName, orgSlug?, orgCode?) => set((state) => {
         state.currentOrgId = orgId;
+        state.selectedChannelId = '';
+        state.selectedDMUserId = null;
+        state.selectedThreadId = null;
+        state.isThreadPanelOpen = false;
+        state.activeTabId = null;
+        state.openTabs = [];
         if (orgName) state.currentOrgName = orgName;
+        if (orgSlug) state.currentOrgSlug = orgSlug;
+        if (orgCode) state.currentOrgCode = orgCode;
       }),
+
+      setCurrentUserRole: (role) => set((state) => {
+        state.currentUserRole = role;
+      }) as any,
 
       setCurrentUserStatus: (status) => set((state) => {
         state.currentUserStatus = status;
@@ -358,7 +377,7 @@ export const useUIStore = create<UIState>()(
         state.toasts.push({ ...toast, id });
         if (toast.duration !== 0) {
           setTimeout(() => {
-            state.toasts = state.toasts.filter(t => t.id !== id);
+            set((s) => { s.toasts = s.toasts.filter(t => t.id !== id); });
           }, toast.duration || 4000);
         }
       }),
@@ -419,18 +438,31 @@ export const useUIStore = create<UIState>()(
         if (state.activeTabId === tabId) {
           const remaining = state.openTabs;
           if (remaining.length > 0) {
-            // Switch to the tab before the closed one, or the first tab if it was the first
             const newIndex = Math.max(0, tabIndex - 1);
-            state.activeTabId = remaining[newIndex]?.id || remaining[0].id;
+            const nextTab = remaining[newIndex] || remaining[0];
+            state.activeTabId = nextTab.id;
+            if (nextTab.type === 'channel') {
+              state.selectedChannelId = nextTab.id;
+              state.selectedDMUserId = null;
+            } else if (nextTab.type === 'dm') {
+              state.selectedDMUserId = nextTab.id;
+              state.selectedChannelId = '';
+            } else {
+              state.selectedChannelId = '';
+              state.selectedDMUserId = null;
+            }
           } else {
             state.activeTabId = null;
+            state.selectedChannelId = '';
+            state.selectedDMUserId = null;
           }
-        }
-        if (tab?.type === 'dm' && state.selectedDMUserId === tabId) {
-          state.selectedDMUserId = null;
-        }
-        if (tab?.type === 'channel' && state.selectedChannelId === tabId) {
-          state.selectedChannelId = '';
+        } else {
+          if (tab?.type === 'dm' && state.selectedDMUserId === tabId) {
+            state.selectedDMUserId = null;
+          }
+          if (tab?.type === 'channel' && state.selectedChannelId === tabId) {
+            state.selectedChannelId = '';
+          }
         }
       }),
 
@@ -457,6 +489,8 @@ export const useUIStore = create<UIState>()(
         isAuthenticated: state.isAuthenticated,
         currentEmail: state.currentEmail,
         currentOrgId: state.currentOrgId,
+        currentOrgSlug: state.currentOrgSlug,
+        currentOrgCode: state.currentOrgCode,
         selectedChannelId: state.selectedChannelId,
         selectedDMUserId: state.selectedDMUserId,
         openTabs: state.openTabs,

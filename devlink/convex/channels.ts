@@ -80,12 +80,18 @@ export const updateChannel = mutation({
     name: v.optional(v.string()),
     description: v.optional(v.string()),
     type: v.optional(v.union(v.literal("public"), v.literal("private"), v.literal("announcement"))),
+    userId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const { channelId, ...updates } = args;
+    const { channelId, userId, ...updates } = args;
     const now = Date.now();
+    const channel = await ctx.db.get(channelId);
+    const unread = channel?.unread || [];
+    const updatedUnread = userId ? unread.filter((id) => id !== userId) : unread;
     await ctx.db.patch(channelId, {
       ...updates,
+      unread: updatedUnread,
+      unreadCount: updatedUnread.length,
       updatedAt: now,
     });
     return await ctx.db.get(channelId);

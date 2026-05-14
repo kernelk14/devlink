@@ -208,19 +208,81 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                 </div>
                 <div className="form-group">
                   <label className="form-label">theme</label>
-                  <div style={{ display: 'flex', gap: 12 }}>
-                    <button
-                      className={`theme-option ${theme === 'dark' ? 'active' : ''}`}
-                      onClick={() => setTheme('dark')}
-                    >
-                      <div className="theme-preview dark" />
+                  <div className="theme-grid">
+                    <button className={`theme-option ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>
+                      <div className="theme-swatch" style={{ background: 'linear-gradient(135deg, #1a1b26 50%, #24283b 50%)' }} />
                       <span>Tokyo Night</span>
                     </button>
-                    <button
-                      className={`theme-option ${theme === 'light' ? 'active' : ''}`}
-                      onClick={() => setTheme('light')}
-                    >
-                      <div className="theme-preview light" />
+                    <button className={`theme-option ${theme === 'catppuccin' ? 'active' : ''}`} onClick={() => setTheme('catppuccin')}>
+                      <div className="theme-swatch" style={{ background: 'linear-gradient(135deg, #1e1e2e 50%, #313244 50%)' }} />
+                      <span>Catppuccin</span>
+                    </button>
+                    <button className={`theme-option ${theme === 'kanagawa' ? 'active' : ''}`} onClick={() => setTheme('kanagawa')}>
+                      <div className="theme-swatch" style={{ background: 'linear-gradient(135deg, #1f1f28 50%, #2a2a37 50%)' }} />
+                      <span>Kanagawa</span>
+                    </button>
+                    <button className={`theme-option ${theme === 'rose-pine' ? 'active' : ''}`} onClick={() => setTheme('rose-pine')}>
+                      <div className="theme-swatch" style={{ background: 'linear-gradient(135deg, #191724 50%, #26233a 50%)' }} />
+                      <span>Rosé Pine</span>
+                    </button>
+                    <button className={`theme-option ${theme === 'everforest' ? 'active' : ''}`} onClick={() => setTheme('everforest')}>
+                      <div className="theme-swatch" style={{ background: 'linear-gradient(135deg, #2d353b 50%, #3a454a 50%)' }} />
+                      <span>Everforest</span>
+                    </button>
+                    <button className={`theme-option ${theme === 'gruvbox' ? 'active' : ''}`} onClick={() => setTheme('gruvbox')}>
+                      <div className="theme-swatch" style={{ background: 'linear-gradient(135deg, #282828 50%, #3c3836 50%)' }} />
+                      <span>Gruvbox</span>
+                    </button>
+                    <button className={`theme-option ${theme === 'nord' ? 'active' : ''}`} onClick={() => setTheme('nord')}>
+                      <div className="theme-swatch" style={{ background: 'linear-gradient(135deg, #2e3440 50%, #3b4252 50%)' }} />
+                      <span>Nord</span>
+                    </button>
+                    <button className={`theme-option ${theme === 'dracula' ? 'active' : ''}`} onClick={() => setTheme('dracula')}>
+                      <div className="theme-swatch" style={{ background: 'linear-gradient(135deg, #282a36 50%, #3c3f51 50%)' }} />
+                      <span>Dracula</span>
+                    </button>
+                    <button className={`theme-option ${theme === 'monokai-pro' ? 'active' : ''}`} onClick={() => setTheme('monokai-pro')}>
+                      <div className="theme-swatch" style={{ background: 'linear-gradient(135deg, #2d2a2e 50%, #403e41 50%)' }} />
+                      <span>Monokai Pro</span>
+                    </button>
+                    <button className={`theme-option ${theme === 'nightfox' ? 'active' : ''}`} onClick={() => setTheme('nightfox')}>
+                      <div className="theme-swatch" style={{ background: 'linear-gradient(135deg, #1b1b2f 50%, #242442 50%)' }} />
+                      <span>Nightfox</span>
+                    </button>
+                    <button className={`theme-option ${theme === 'oxocarbon' ? 'active' : ''}`} onClick={() => setTheme('oxocarbon')}>
+                      <div className="theme-swatch" style={{ background: 'linear-gradient(135deg, #161616 50%, #262626 50%)' }} />
+                      <span>Oxocarbon</span>
+                    </button>
+                    <button className={`theme-option ${theme === 'github' ? 'active' : ''}`} onClick={() => setTheme('github')}>
+                      <div className="theme-swatch" style={{ background: 'linear-gradient(135deg, #0d1117 50%, #21262d 50%)' }} />
+                      <span>GitHub Dark</span>
+                    </button>
+                    <button className={`theme-option ${theme === 'sonokai' ? 'active' : ''}`} onClick={() => setTheme('sonokai')}>
+                      <div className="theme-swatch" style={{ background: 'linear-gradient(135deg, #2c2e34 50%, #363a45 50%)' }} />
+                      <span>Sonokai</span>
+                    </button>
+                    <button className={`theme-option ${theme === 'onedark' ? 'active' : ''}`} onClick={() => setTheme('onedark')}>
+                      <div className="theme-swatch" style={{ background: 'linear-gradient(135deg, #282c34 50%, #353b45 50%)' }} />
+                      <span>One Dark</span>
+                    </button>
+                    <button className={`theme-option ${theme === 'ayu' ? 'active' : ''}`} onClick={() => setTheme('ayu')}>
+                      <div className="theme-swatch" style={{ background: 'linear-gradient(135deg, #0b0e14 50%, #1a1f29 50%)' }} />
+                      <span>Ayu Dark</span>
+                    </button>
+                    <button className={`theme-option ${theme === 'cyberdream' ? 'active' : ''}`} onClick={() => setTheme('cyberdream')}>
+                      <div className="theme-swatch" style={{ background: 'linear-gradient(135deg, #0a0b10 50%, #1a1b22 50%)' }} />
+                      <span>Cyberdream</span>
+                    </button>
+                    <button className={`theme-option ${theme === 'material' ? 'active' : ''}`} onClick={() => setTheme('material')}>
+                      <div className="theme-swatch" style={{ background: 'linear-gradient(135deg, #263238 50%, #37474f 50%)' }} />
+                      <span>Material</span>
+                    </button>
+                    <button className={`theme-option ${theme === 'gruber-darker' ? 'active' : ''}`} onClick={() => setTheme('gruber-darker')}>
+                      <div className="theme-swatch" style={{ background: 'linear-gradient(135deg, #181818 50%, #282828 50%)' }} />
+                      <span>Gruber Darker</span>
+                    </button>
+                    <button className={`theme-option ${theme === 'light' ? 'active' : ''}`} onClick={() => setTheme('light')}>
+                      <div className="theme-swatch" style={{ background: 'linear-gradient(135deg, #f5f7fb 50%, #ffffff 50%)' }} />
                       <span>Daybreak</span>
                     </button>
                   </div>

@@ -1,27 +1,39 @@
-import { mutation } from "./_generated/server";
+"use node";
 
-// Seed initial data for development
-export const seed = mutation({
+import { action } from "./_generated/server";
+import crypto from "crypto";
+
+function hashPassword(password: string, salt: string): string {
+  return crypto.pbkdf2Sync(password, salt, 100000, 64, "sha512").toString("hex");
+}
+
+function generateSalt(): string {
+  return crypto.randomBytes(16).toString("hex");
+}
+
+export const seed = action({
   args: {},
   handler: async (ctx) => {
     const now = Date.now();
-    
-    // Check if we already have data
+
     const existingUsers = await ctx.db.query("users").collect();
     if (existingUsers.length > 0) {
       return { seeded: false, message: "Database already has data" };
     }
 
-    // Create default organization
+    const demoSalt = generateSalt();
+    const demoHash = hashPassword("demo123", demoSalt);
+
     const orgId = await ctx.db.insert("organizations", {
       name: "DevLink Inc",
       slug: "devlink",
+      code: "D3VL-1NK-C0DE",
+      visibility: "public",
       memberCount: 7,
       createdAt: now,
       updatedAt: now,
     });
 
-    // Create users
     const users = await Promise.all([
       ctx.db.insert("users", {
         name: "Sarah Chen",
@@ -32,6 +44,8 @@ export const seed = mutation({
         color: "var(--purple)",
         orgId: orgId.toString(),
         role: "owner",
+        passwordHash: demoHash,
+        salt: demoSalt,
         createdAt: now,
         updatedAt: now,
       }),
@@ -44,6 +58,8 @@ export const seed = mutation({
         color: "var(--blue)",
         orgId: orgId.toString(),
         role: "member",
+        passwordHash: demoHash,
+        salt: demoSalt,
         createdAt: now,
         updatedAt: now,
       }),
@@ -55,6 +71,8 @@ export const seed = mutation({
         color: "var(--green)",
         orgId: orgId.toString(),
         role: "member",
+        passwordHash: demoHash,
+        salt: demoSalt,
         createdAt: now,
         updatedAt: now,
       }),
@@ -67,6 +85,8 @@ export const seed = mutation({
         color: "var(--orange)",
         orgId: orgId.toString(),
         role: "member",
+        passwordHash: demoHash,
+        salt: demoSalt,
         createdAt: now,
         updatedAt: now,
       }),
@@ -79,6 +99,8 @@ export const seed = mutation({
         color: "var(--pink)",
         orgId: orgId.toString(),
         role: "admin",
+        passwordHash: demoHash,
+        salt: demoSalt,
         createdAt: now,
         updatedAt: now,
       }),
@@ -90,6 +112,8 @@ export const seed = mutation({
         color: "var(--cyan)",
         orgId: orgId.toString(),
         role: "member",
+        passwordHash: demoHash,
+        salt: demoSalt,
         createdAt: now,
         updatedAt: now,
       }),
@@ -102,12 +126,13 @@ export const seed = mutation({
         color: "var(--yellow)",
         orgId: orgId.toString(),
         role: "member",
+        passwordHash: demoHash,
+        salt: demoSalt,
         createdAt: now,
         updatedAt: now,
       }),
     ]);
 
-    // Create channels
     const channels = await Promise.all([
       ctx.db.insert("channels", {
         name: "general",
@@ -195,7 +220,6 @@ export const seed = mutation({
       }),
     ]);
 
-    // Add some initial messages to general channel
     const generalChannelId = channels[0];
     const hourAgo = now - 3600000;
     const halfHourAgo = now - 1800000;
